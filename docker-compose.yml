@@ -26,12 +26,12 @@ services:
       - app-network
 
   # API Agent服务 (NestJS)
-  api-agent:
+  agent-api:
     build:
       context: .
-      dockerfile: apps/api-agent/Dockerfile
+      dockerfile: apps/agent-api/Dockerfile
       target: development
-    container_name: api-agent-dev
+    container_name: agent-api-dev
     ports:
       - "3001:3001"
     volumes:
@@ -45,13 +45,13 @@ services:
     develop:
       watch:
         - action: sync
-          path: ./apps/api-agent/src
-          target: /app/apps/api-agent/src
+          path: ./apps/agent-api/src
+          target: /app/apps/agent-api/src
         - action: sync
           path: ./packages
           target: /app/packages
         - action: rebuild
-          path: ./apps/api-agent/package.json
+          path: ./apps/agent-api/package.json
         - action: rebuild
           path: ./package.json
 

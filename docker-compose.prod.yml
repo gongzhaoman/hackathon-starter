@@ -31,7 +31,7 @@ services:
   db-migrate:
     build:
       context: .
-      dockerfile: apps/api-agent/Dockerfile
+      dockerfile: apps/agent-api/Dockerfile
       target: production
     container_name: db-migrate-prod
     environment:
@@ -42,16 +42,16 @@ services:
     networks:
       - app-network
     # ✅ 只执行迁移，不启动应用
-    command: sh -c "cd apps/api-agent && pnpm run db:deploy"
+    command: sh -c "cd apps/agent-api && pnpm run db:deploy"
     restart: "no"  # 运行一次就退出
 
   # API Agent服务 (NestJS)
-  api-agent:
+  agent-api:
     build:
       context: .
-      dockerfile: apps/api-agent/Dockerfile
+      dockerfile: apps/agent-api/Dockerfile
       target: production
-    container_name: api-agent-prod
+    container_name: agent-api-prod
     ports:
       - "3001:3001"
     environment:

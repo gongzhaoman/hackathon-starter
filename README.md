@@ -7,7 +7,7 @@
 ```
 hackathon-starter/
 ├── apps/                          # 应用目录
-│   ├── api-agent/                 # NestJS API 服务
+│   ├── agent-api/                 # NestJS API 服务
 │   │   ├── src/                   # 源代码
 │   │   ├── prisma/                # 数据库模型
 │   │   ├── Dockerfile             # Docker 配置
@@ -146,23 +146,23 @@ pnpm run build        # 构建所有应用
 pnpm run lint         # 检查所有应用
 
 # 针对特定应用执行命令
-pnpm --filter api-agent run dev
+pnpm --filter agent-api run dev
 pnpm --filter next run build
 pnpm --filter vite run lint
 
 # 添加依赖到特定应用
-pnpm --filter api-agent add express
+pnpm --filter agent-api add express
 pnpm --filter next add axios
 ```
 
 ### 数据库管理
 
 ```bash
-# 进入 api-agent 容器
-docker compose exec api-agent sh
+# 进入 agent-api 容器
+docker compose exec agent-api sh
 
 # 在容器内执行 Prisma 命令
-cd apps/api-agent
+cd apps/agent-api
 pnpm run db:generate     # 生成客户端
 pnpm run db:migrate      # 运行迁移
 pnpm run db:push         # 推送模式更改
