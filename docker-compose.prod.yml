@@ -1,0 +1,125 @@
+version: '3.8'
+
+services:
+  # PostgreSQL数据库
+  postgres:
+    image: ankane/pgvector
+    container_name: postgres-prod
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-hackathon}
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_prod_data:/var/lib/postgresql/data
+    networks:
+      - app-network
+    restart: unless-stopped
+
+  # Redis缓存
+  redis:
+    image: redis:7-alpine
+    container_name: redis-prod
+    ports:
+      - "6379:6379"
+    networks:
+      - app-network
+    restart: unless-stopped
+
+  # 数据库迁移
+  db-migrate:
+    build:
+      context: .
+      dockerfile: apps/api-agent/Dockerfile
+      target: production
+    container_name: db-migrate-prod
+    environment:
+      - DATABASE_URL=${DATABASE_URL}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - app-network
+    # ✅ 只执行迁移，不启动应用
+    command: sh -c "cd apps/api-agent && pnpm run db:deploy"
+    restart: "no"  # 运行一次就退出
+
+  # API Agent服务 (NestJS)
+  api-agent:
+    build:
+      context: .
+      dockerfile: apps/api-agent/Dockerfile
+      target: production
+    container_name: api-agent-prod
+    ports:
+      - "3001:3001"
+    environment:
+      - NODE_ENV=production
+      - DATABASE_URL=${DATABASE_URL:-postgresql://postgres:postgres@postgres:5432/hackathon}
+      - REDIS_URL=redis://redis:6379
+    depends_on:
+      db-migrate:
+        condition: service_completed_successfully
+      - postgres
+      - redis
+
+    networks:
+      - app-network
+    restart: unless-stopped
+
+  # Hono API服务
+  hono:
+    build:
+      context: .
+      dockerfile: apps/hono/Dockerfile
+      target: production
+    container_name: hono-prod
+    ports:
+      - "3002:3002"
+    environment:
+      - NODE_ENV=production
+    networks:
+      - app-network
+    restart: unless-stopped
+
+  # Next.js前端应用
+  next:
+    build:
+      context: .
+      dockerfile: apps/next/Dockerfile
+      target: production
+    container_name: next-prod
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=production
+      - NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL:-http://localhost:3001}
+      - NEXT_PUBLIC_HONO_API_URL=${NEXT_PUBLIC_HONO_API_URL:-http://localhost:3002}
+    networks:
+      - app-network
+    restart: unless-stopped
+
+  # Vite前端应用
+  vite:
+    build:
+      context: .
+      dockerfile: apps/vite/Dockerfile
+      target: production
+    container_name: vite-prod
+    ports:
+      - "5173:3000"
+    environment:
+      - NODE_ENV=production
+      - VITE_API_URL=${VITE_API_URL:-http://localhost:3001}
+      - VITE_HONO_API_URL=${VITE_HONO_API_URL:-http://localhost:3002}
+    networks:
+      - app-network
+    restart: unless-stopped
+
+volumes:
+  postgres_prod_data:
+
+networks:
+  app-network:
+    driver: bridge

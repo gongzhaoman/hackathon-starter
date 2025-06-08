@@ -1,0 +1,155 @@
+version: '3.8'
+
+services:
+  # PostgreSQL数据库
+  postgres:
+    image: ankane/pgvector
+    container_name: postgres-dev
+    environment:
+      POSTGRES_DB: hackathon
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - app-network
+
+  # Redis缓存
+  redis:
+    image: redis:7-alpine
+    container_name: redis-dev
+    ports:
+      - "6379:6379"
+    networks:
+      - app-network
+
+  # API Agent服务 (NestJS)
+  api-agent:
+    build:
+      context: .
+      dockerfile: apps/api-agent/Dockerfile
+      target: development
+    container_name: api-agent-dev
+    ports:
+      - "3001:3001"
+    volumes:
+      # 保留node_modules在容器内
+      - /app/node_modules
+    depends_on:
+      - postgres
+      - redis
+    networks:
+      - app-network
+    develop:
+      watch:
+        - action: sync
+          path: ./apps/api-agent/src
+          target: /app/apps/api-agent/src
+        - action: sync
+          path: ./packages
+          target: /app/packages
+        - action: rebuild
+          path: ./apps/api-agent/package.json
+        - action: rebuild
+          path: ./package.json
+
+  # Hono API服务
+  hono:
+    build:
+      context: .
+      dockerfile: apps/hono/Dockerfile
+      target: development
+    container_name: hono-dev
+    ports:
+      - "3002:3002"
+    environment:
+      - NODE_ENV=development
+    volumes:
+      - /app/node_modules
+    networks:
+      - app-network
+    develop:
+      watch:
+        - action: sync
+          path: ./apps/hono/src
+          target: /app/apps/hono/src
+        - action: sync
+          path: ./packages
+          target: /app/packages
+        - action: rebuild
+          path: ./apps/hono/package.json
+        - action: rebuild
+          path: ./package.json
+
+  # Next.js前端应用
+  next:
+    build:
+      context: .
+      dockerfile: apps/next/Dockerfile
+      target: development
+    container_name: next-dev
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=development
+      - NEXT_PUBLIC_API_URL=http://localhost:3001
+      - NEXT_PUBLIC_HONO_API_URL=http://localhost:3002
+    volumes:
+      - /app/node_modules
+      - /app/apps/next/.next
+    networks:
+      - app-network
+    develop:
+      watch:
+        - action: sync
+          path: ./apps/next/src
+          target: /app/apps/next/src
+        - action: sync
+          path: ./apps/next/app
+          target: /app/apps/next/app
+        - action: sync
+          path: ./packages
+          target: /app/packages
+        - action: rebuild
+          path: ./apps/next/package.json
+        - action: rebuild
+          path: ./package.json
+
+  # Vite前端应用
+  vite:
+    build:
+      context: .
+      dockerfile: apps/vite/Dockerfile
+      target: development
+    container_name: vite-dev
+    ports:
+      - "5173:5173"
+    environment:
+      - NODE_ENV=development
+      - VITE_API_URL=http://localhost:3001
+      - VITE_HONO_API_URL=http://localhost:3002
+    volumes:
+      - /app/node_modules
+    networks:
+      - app-network
+    develop:
+      watch:
+        - action: sync
+          path: ./apps/vite/src
+          target: /app/apps/vite/src
+        - action: sync
+          path: ./packages
+          target: /app/packages
+        - action: rebuild
+          path: ./apps/vite/package.json
+        - action: rebuild
+          path: ./package.json
+
+volumes:
+  postgres_data:
+
+networks:
+  app-network:
+    driver: bridge

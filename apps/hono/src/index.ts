@@ -12,7 +12,7 @@ const app = new Hono()
 app.use('*', logger())
 app.use('*', prettyJSON())
 app.use('*', cors({
-  origin: ['http://localhost:3000', 'http://localhost:3001'],
+  origin: ['http://localhost:3000', 'http://localhost:5173', 'http://localhost:3001'],
   allowHeaders: ['Content-Type', 'Authorization'],
   allowMethods: ['GET', 'POST', 'PUT', 'DELETE'],
 }))
@@ -47,10 +47,13 @@ app.onError((err, c) => {
   }, 500)
 })
 
-const port = Number(process.env.PORT) || 8080
-console.log(`🚀 Server running on http://localhost:${port}`)
+const port = Number(process.env.PORT) || 3002
+const host = process.env.HOST || '0.0.0.0'
+
+console.log(`🚀 Hono Server running on http://${host}:${port}`)
 
 serve({
   fetch: app.fetch,
-  port
+  port,
+  hostname: host
 })
