@@ -1,0 +1,40 @@
+{
+  "id": "workflowMailSummarySend",
+  "name": "AI邮件摘要与推送",
+  "description": "AI自动摘要邮件并通过企业微信推送",
+  "tools": ["summarize", "sendWeCom"],
+  "agents": [
+    {
+      "name": "mailSummarizerAgent",
+      "description": "基于LLM对邮件内容进行结构化摘要。",
+      "prompt": "请总结输入的邮件内容，简洁扼要，输出JSON：{\"summary\": \"...\"}",
+      "output": { "summary": "string" },
+      "tools": ["summarize"]
+    }
+  ],
+  "content": {},
+  "events": [
+    {
+      "type": "WORKFLOW_START",
+      "data": { "emailContent": "string" }
+    },
+    {
+      "type": "SUMMARY_DONE",
+      "data": { "summary": "string" }
+    },
+    {
+      "type": "WORKFLOW_STOP",
+      "data": { "sendResult": "string" }
+    }
+  ],
+  "steps": [
+    {
+      "event": "WORKFLOW_START",
+      "handle": "async (event, context) => { const { summary } = await mailSummarizerAgent({ emailContent: event.data.emailContent }); return { type: 'SUMMARY_DONE', data: { summary } }; }"
+    },
+    {
+      "event": "SUMMARY_DONE",
+      "handle": "async (event, context) => { const sendResult = await sendWeCom({ text: event.data.summary }); return { type: 'WORKFLOW_STOP', data: { sendResult } }; }"
+    }
+  ]
+}

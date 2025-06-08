@@ -1,0 +1,186 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "AI工作流编排DSL Schema",
+  "description": "定义AI工作流编排的DSL结构规范，支持OpenAI结构化输出",
+  "type": "object",
+  "required": [
+    "id",
+    "name",
+    "description",
+    "version",
+    "tools",
+    "events",
+    "steps"
+  ],
+  "properties": {
+    "id": {
+      "type": "string",
+      "description": "工作流的唯一标识符",
+      "pattern": "^[a-zA-Z][a-zA-Z0-9_]*$",
+      "minLength": 1,
+      "maxLength": 100
+    },
+    "version": {
+      "type": "string",
+      "description": "DSL协议版本号，用于管理不同版本的Schema",
+      "pattern": "^v\\d+(\\.\\d+){0,2}$",
+      "default": "v1"
+    },
+    "name": {
+      "type": "string",
+      "description": "工作流的显示名称",
+      "minLength": 1,
+      "maxLength": 200
+    },
+    "description": {
+      "type": "string",
+      "description": "工作流的功能描述",
+      "minLength": 1,
+      "maxLength": 500
+    },
+    "tools": {
+      "type": "array",
+      "description": "工作流中使用的所有工具名称列表",
+      "items": {
+        "type": "string",
+        "pattern": "^[a-zA-Z][a-zA-Z0-9_]*$"
+      },
+      "uniqueItems": true,
+      "minItems": 1
+    },
+    "agents": {
+      "type": "array",
+      "description": "工作流中定义的智能体列表",
+      "items": {
+        "type": "object",
+        "required": ["name", "description", "prompt", "output"],
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "智能体名称",
+            "pattern": "^[a-zA-Z][a-zA-Z0-9_]*$",
+            "minLength": 1,
+            "maxLength": 100
+          },
+          "description": {
+            "type": "string",
+            "description": "智能体功能描述",
+            "minLength": 1,
+            "maxLength": 300
+          },
+          "prompt": {
+            "type": "string",
+            "description": "智能体的系统提示词，用于指导模型完成任务",
+            "minLength": 1,
+            "maxLength": 2000
+          },
+          "output": {
+            "type": "object",
+            "description": "结构化输出格式定义（符合OpenAI函数调用Schema格式）",
+            "additionalProperties": {
+              "type": "string",
+              "enum": ["string", "number", "boolean", "object", "array"]
+            }
+          },
+          "tools": {
+            "type": "array",
+            "description": "该智能体可使用的工具列表",
+            "items": {
+              "type": "string",
+              "pattern": "^[a-zA-Z][a-zA-Z0-9_]*$"
+            },
+            "uniqueItems": true
+          }
+        },
+        "additionalProperties": false
+      },
+      "uniqueItems": true
+    },
+    "content": {
+      "type": "object",
+      "description": "工作流的上下文数据，可以为空对象",
+      "additionalProperties": true
+    },
+    "events": {
+      "type": "array",
+      "description": "工作流中定义的所有事件类型",
+      "minItems": 2,
+      "uniqueItems": true,
+      "items": {
+        "type": "object",
+        "required": ["type", "data"],
+        "properties": {
+          "type": {
+            "type": "string",
+            "description": "事件类型名称（如 WORKFLOW_START / WORKFLOW_STOP / XXX_DONE）",
+            "pattern": "^[A-Z][A-Z0-9_]*$",
+            "minLength": 1,
+            "maxLength": 100
+          },
+          "data": {
+            "type": "object",
+            "description": "事件携带的数据结构定义",
+            "additionalProperties": {
+              "type": "string",
+              "enum": ["string", "number", "boolean", "object", "array"]
+            }
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    "steps": {
+      "type": "array",
+      "description": "工作流的步骤处理逻辑。每个步骤定义一个事件的处理逻辑。",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": {
+        "type": "object",
+        "required": ["event", "handle"],
+        "properties": {
+          "event": {
+            "type": "string",
+            "description": "触发该步骤的事件类型，必须与 events 中已定义的 type 匹配",
+            "pattern": "^[A-Z][A-Z0-9_]*$"
+          },
+          "handle": {
+            "type": "string",
+            "description": "事件处理函数（JS异步函数），格式为 async (event, context) => { ... }",
+            "minLength": 10,
+            "pattern": "^async\\s*\\(\\s*event\\s*,\\s*context\\s*\\)\\s*=>\\s*\\{[\\s\\S]*\\}$"
+          }
+        },
+        "additionalProperties": false
+      }
+    }
+  },
+  "additionalProperties": false,
+  "definitions": {
+    "eventValidation": {
+      "description": "事件流验证规则",
+      "properties": {
+        "mustHaveWorkflowStart": {
+          "description": "必须包含 WORKFLOW_START 事件",
+          "const": true
+        },
+        "mustHaveWorkflowStop": {
+          "description": "必须包含 WORKFLOW_STOP 事件",
+          "const": true
+        }
+      }
+    },
+    "stepValidation": {
+      "description": "步骤验证规则",
+      "properties": {
+        "eventsMatchSteps": {
+          "description": "除 WORKFLOW_STOP 外所有事件都应至少在 steps 中被处理",
+          "const": true
+        },
+        "handleFunctionFormat": {
+          "description": "handle 函数必须符合 async (event, context) => { ... } 格式",
+          "const": true
+        }
+      }
+    }
+  }
+}
