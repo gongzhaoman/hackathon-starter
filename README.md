@@ -44,19 +44,23 @@ hackathon-starter/
 ## 🛠 技术栈
 
 ### 后端服务
+
 - **API Agent**: NestJS + Prisma + PostgreSQL + Redis
 - **Hono API**: Hono.js (轻量级 Web 框架)
 
 ### 前端应用
+
 - **Next.js App**: React 19 + Next.js 15 + Tailwind CSS
 - **Vite App**: React 19 + Vite + Tailwind CSS
 
 ### 开发工具
+
 - **Monorepo**: Turborepo + PNPM Workspaces
 - **代码质量**: ESLint + Prettier + TypeScript
 - **容器化**: Docker + Docker Compose (支持热更新)
 
 ### 数据库
+
 - **PostgreSQL**: 主数据库
 - **Redis**: 缓存服务
 
@@ -201,14 +205,17 @@ docker compose -f docker-compose.prod.yml up --build -d [service-name]
 ## 🔥 热更新功能
 
 ### 文件同步 (sync)
+
 - 源代码变更自动同步到容器
 - 支持的路径：`src/`、`app/`、`packages/`
 
 ### 自动重建 (rebuild)
+
 - `package.json` 变更触发容器重新构建
 - 新增/删除依赖时自动重建
 
 ### 使用方法
+
 ```bash
 ./scripts/dev.sh
 ```
@@ -252,21 +259,25 @@ pnpm init
 ## 🛡️ 最佳实践
 
 ### 代码质量
+
 - 使用 ESLint 和 Prettier 保持代码一致性
 - 配置 Git hooks 进行代码检查
 - 遵循 TypeScript 严格模式
 
 ### 安全性
+
 - 使用强密码和环境变量
 - 定期更新依赖包
 - 在生产环境中限制端口访问
 
 ### 性能优化
+
 - 使用多阶段 Docker 构建
 - 合理配置缓存策略
 - 监控服务性能指标
 
 ### 开发效率
+
 - 利用 Monorepo 共享代码
 - 使用热更新加速开发
 - 编写清晰的文档和注释
@@ -276,6 +287,7 @@ pnpm init
 ### 常见问题
 
 #### 1. 端口冲突
+
 ```bash
 # 查看端口占用
 lsof -i :3000
@@ -286,6 +298,7 @@ ports:
 ```
 
 #### 2. 容器启动失败
+
 ```bash
 # 查看详细日志
 docker compose logs [service-name] --tail 50 -f
@@ -298,6 +311,7 @@ docker system prune -a
 ```
 
 #### 3. 数据库连接问题
+
 ```bash
 # 检查数据库是否启动
 docker compose ps postgres
@@ -307,6 +321,7 @@ docker compose exec postgres psql -U postgres -d hackathon
 ```
 
 #### 4. 热更新不工作
+
 ```bash
 docker-compose watch
 
