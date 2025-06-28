@@ -53,7 +53,16 @@ export class ToolExplorerToolkit extends BaseToolkit {
   async listAllTools(): Promise<
     { name: string; description: string }[] | string
   > {
-    const tools = await this.prismaService.tool.findMany();
+    // 排除 tool-explorer-toolkit 中的元工具，只返回业务工具
+    const tools = await this.prismaService.tool.findMany({
+      where: {
+        toolkit: {
+          id: {
+            not: 'tool-explorer-toolkit-01'
+          }
+        }
+      }
+    });
     if (tools.length === 0) {
       return 'No tools found';
     }

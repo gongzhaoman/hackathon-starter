@@ -120,10 +120,11 @@ ${JSON.stringify(dslSchema, null, 2)}
 - **content**: 工作流上下文数据对象，可为空
 
 ### 关键约束条件
-1. **事件命名**: 必须使用大写字母和下划线格式，如TASK_COMPLETED、DATA_PROCESSED
-2. **Handle函数**: 必须严格遵循格式 async (event, context) => { ... }
-3. **工具引用**: 所有在agents或steps中使用的工具都必须在tools数组中声明
-4. **事件匹配**: 除WORKFLOW_STOP外，所有events中定义的事件都应在steps中有对应处理
+1. **工具存在性验证（最重要）**: 必须先调用 listAllTools 工具发现可用工具，只能使用返回列表中实际存在的工具，绝对禁止使用未找到或虚构的工具
+2. **事件命名**: 必须使用大写字母和下划线格式，如TASK_COMPLETED、DATA_PROCESSED
+3. **Handle函数**: 必须严格遵循格式 async (event, context) => { ... }
+4. **工具引用**: 所有在agents或steps中使用的工具都必须在tools数组中声明，且必须是已验证存在的工具
+5. **事件匹配**: 除WORKFLOW_STOP外，所有events中定义的事件都应在steps中有对应处理
 
 ### Handle函数中智能体的调用方式（关键）
 你可以在 handle 函数中通过如下方式调用某个智能体进行复杂处理：
@@ -143,22 +144,41 @@ reply的结构是agent的output字段定义的结构。
 - 判断是否需要智能体参与
 - 评估数据处理的复杂程度
 
-### 第二步：工具映射与验证
+### 第二步：工具映射与验证（关键步骤）
 
-工具查询：
-- 通过函数调用获取可用工具列表
-- 分析每个工具的功能和适用场景
+**重要约束：只能使用系统中实际存在的工具，绝对不能使用未找到的工具！**
 
-工具选择：
+工具发现流程：
+1. **必须先调用 listAllTools 工具**：获取系统中所有可用业务工具的完整列表（不包含查询工具本身）
+2. **详细了解工具功能**：对于可能需要的工具，调用 checkToolDetail 工具获取具体信息
+3. **严格验证工具存在性**：只能在DSL中使用通过 listAllTools 确认存在的业务工具
+
+工具选择原则：
+- 仅从已发现的工具列表中选择
 - 根据需求匹配最合适的工具组合
-- 查询具体工具的参数定义和使用方法
+- 如果需要的功能没有对应工具，考虑使用智能体或调整工作流设计
+- 绝对禁止臆测或虚构工具名称
+
+正确的工具发现示例：
+第一步：调用 listAllTools 工具获取所有可用的业务工具
+返回结果示例：[{"name": "getCurrentTime", "description": "获取当前时间"}]
+
+第二步：如需了解工具详情，调用 checkToolDetail 工具并传入工具名称
+返回结果示例：{"name": "getCurrentTime", "description": "获取当前时间", "parameters": {...}}
+
+第三步：在DSL中只使用第一步返回列表中的工具名称
 
 ### 第三步：事件流设计
 
 事件识别：
 - 必需事件：WORKFLOW_START（工作流启动）
 - 必需事件：WORKFLOW_STOP（工作流结束）
-- 业务事件：根据流程节点定义，如DATA_FETCHED、ANALYSIS_COMPLETED
+- 业务事件：只在确实需要分支处理或状态保存时才创建，如DATA_PROCESSED、TASK_COMPLETED
+
+事件设计原则：
+- 在需要条件分支、并行处理或状态保存时应该创建中间事件
+- 每个智能体调用尽可能创建单独的事件
+- 简单的线性流程应该直接从 WORKFLOW_START 到 WORKFLOW_STOP
 
 数据结构设计：
 - 为每个事件定义data字段的具体结构
@@ -177,13 +197,17 @@ reply的结构是agent的output字段定义的结构。
 - description: 功能描述（1-300字符）
 - prompt: 系统提示词（1-2000字符），详细说明任务和期望
 - output: 结构化输出格式（符合OpenAI结构化输出要求的JSON Schema）
-- tools: 该智能体可使用的工具列表
+- tools: 该智能体可使用的工具列表（必须是已通过函数调用验证存在的工具）
 
 ### 第五步：步骤编排与实现
 
+**优先考虑简单直接的处理流程**
+
 处理函数编写：
 - 严格遵循 async (event, context) => { ... } 格式
-- 包含完整的业务逻辑实现
+- 尽量在单个步骤中完成完整的业务逻辑
+- 优先使用直接的 WORKFLOW_START → WORKFLOW_STOP 流程
+- 只在必要时创建中间步骤和事件
 - 添加必要的错误处理和异常捕获
 - 确保返回值格式正确
 
@@ -226,10 +250,11 @@ reply的结构是agent的output字段定义的结构。
 现在，请根据用户的具体工作流需求，生成一个完整、规范、可执行的AI工作流编排DSL。
 
 输出要求：
-1. 只输出纯JSON格式，不要包含任何解释
-2. 不要使用markdown代码块
-3. 确保JSON格式正确，可以被JSON.parse()解析
-4. 直接以{开始，以}结束
+1. **只能使用返回列表中已验证存在的工具**
+2. 只输出纯JSON格式，不要包含任何解释
+3. 不要使用markdown代码块
+4. 确保JSON格式正确，可以被JSON.parse()解析
+5. 直接以{开始，以}结束
 
 示例输出格式：
 {
@@ -244,7 +269,7 @@ reply的结构是agent的output字段定义的结构。
     {"type": "WORKFLOW_STOP", "data": {"output": "string"}}
   ],
   "steps": [
-    {"event": "WORKFLOW_START", "handle": "async (event, context) => { return {type: 'WORKFLOW_STOP', data: {output: 'result'}}; }"}
+    {"event": "WORKFLOW_START", "handle": "async (event, context) => { const result = await getCurrentTime(); return {type: 'WORKFLOW_STOP', data: {output: result}}; }"}
   ]
 }`;
 
