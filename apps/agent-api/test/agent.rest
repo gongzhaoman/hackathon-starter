@@ -7,7 +7,7 @@
 
 ### 快速测试变量 (手动设置智能体ID)
 # 运行 GET /agents 后，从响应中复制智能体ID到这里
-@testAgentId = cmcgfusx10006y8mqo7cmpguk
+@testAgentId = cmcggp7ho000elnek35m1t6x9
 
 ### 1. 健康检查
 GET {{baseUrl}}/health
@@ -35,7 +35,12 @@ Content-Type: {{contentType}}
     "maxTokens": 1000,
     "model": "gpt-4o-mini"
   },
-  "toolkitIds": ["common-toolkit-01"]
+  "toolkits": [
+    {
+      "toolkitId": "common-toolkit-01",
+      "settings": {}
+    }
+  ]
 }
 
 ### 4. 创建新的智能体 - 数据分析师 (带工具包选择)
@@ -52,7 +57,16 @@ Content-Type: {{contentType}}
     "maxTokens": 1500,
     "model": "gpt-4o-mini"
   },
-  "toolkitIds": ["common-toolkit-01", "tool-explorer-toolkit-01"]
+  "toolkits": [
+    {
+      "toolkitId": "common-toolkit-01",
+      "settings": {}
+    },
+    {
+      "toolkitId": "tool-explorer-toolkit-01",
+      "settings": {}
+    }
+  ]
 }
 
 ### 5. 创建新的智能体 - 工作流设计师 (不指定工具包，应自动分配 common toolkit)
@@ -248,14 +262,59 @@ Content-Type: {{contentType}}
     "maxTokens": 1000,
     "model": "gpt-4o-mini"
   },
-  "toolkitIds": ["common-toolkit-01", "tool-explorer-toolkit-01"]
+  "toolkits": [
+    {
+      "toolkitId": "common-toolkit-01",
+      "settings": {}
+    },
+    {
+      "toolkitId": "tool-explorer-toolkit-01",
+      "settings": {}
+    }
+  ]
 }
 
 ### 测试2: 验证多工具包智能体的工具包分配
 GET {{baseUrl}}/agents/{{createMultiToolkitAgent.response.body.id}}/toolkits
 Content-Type: {{contentType}}
 
-### 测试3: 创建智能体时不指定工具包（应自动分配 common toolkit）
+### 测试3a: 验证带设置的工具包智能体的工具包分配（应该包含设置）
+GET {{baseUrl}}/agents/{{createToolkitWithSettingsAgent.response.body.id}}/toolkits
+Content-Type: {{contentType}}
+
+### 测试3: 创建智能体时使用 toolkits 字段（带设置）
+# @name createToolkitWithSettingsAgent
+POST {{baseUrl}}/agents
+Content-Type: {{contentType}}
+
+{
+  "name": "带设置的工具包测试智能体",
+  "description": "用于测试工具包设置功能的智能体",
+  "prompt": "你是一个测试智能体，拥有配置了特定设置的工具包。",
+  "options": {
+    "temperature": 0.5,
+    "maxTokens": 1000,
+    "model": "gpt-4o-mini"
+  },
+  "toolkits": [
+    {
+      "toolkitId": "common-toolkit-01",
+      "settings": {
+        "timezone": "Asia/Shanghai",
+        "dateFormat": "YYYY-MM-DD HH:mm:ss"
+      }
+    },
+    {
+      "toolkitId": "tool-explorer-toolkit-01",
+      "settings": {
+        "maxResults": 10,
+        "includeDescription": true
+      }
+    }
+  ]
+}
+
+### 测试4: 创建智能体时不指定工具包（应自动分配 common toolkit）
 # @name createAutoToolkitAgent
 POST {{baseUrl}}/agents
 Content-Type: {{contentType}}
@@ -289,15 +348,54 @@ Content-Type: {{contentType}}
     "maxTokens": 1000,
     "model": "gpt-4o-mini"
   },
-  "toolkitIds": ["common-toolkit-01", "non-existent-toolkit", "tool-explorer-toolkit-01"]
+  "toolkits": [
+    {
+      "toolkitId": "common-toolkit-01",
+      "settings": {}
+    },
+    {
+      "toolkitId": "non-existent-toolkit",
+      "settings": {}
+    },
+    {
+      "toolkitId": "tool-explorer-toolkit-01",
+      "settings": {}
+    }
+  ]
 }
 
 ### 测试6: 验证无效工具包处理（应该只有有效的工具包）
 GET {{baseUrl}}/agents/{{createInvalidToolkitAgent.response.body.id}}/toolkits
 Content-Type: {{contentType}}
 
+### 测试7: 更新智能体的工具包设置
+PUT {{baseUrl}}/agents/{{createToolkitWithSettingsAgent.response.body.id}}
+Content-Type: {{contentType}}
+
+{
+  "name": "更新后的带设置工具包智能体",
+  "toolkits": [
+    {
+      "toolkitId": "common-toolkit-01",
+      "settings": {
+        "timezone": "UTC",
+        "dateFormat": "ISO8601",
+        "locale": "en-US"
+      }
+    }
+  ]
+}
+
+### 测试7a: 验证更新后的工具包设置
+GET {{baseUrl}}/agents/{{createToolkitWithSettingsAgent.response.body.id}}/toolkits
+Content-Type: {{contentType}}
+
 ### 清理测试数据
 DELETE {{baseUrl}}/agents/{{createMultiToolkitAgent.response.body.id}}
+Content-Type: {{contentType}}
+
+###
+DELETE {{baseUrl}}/agents/{{createToolkitWithSettingsAgent.response.body.id}}
 Content-Type: {{contentType}}
 
 ###
@@ -447,9 +545,12 @@ Content-Type: {{contentType}}
 # - 智能体会根据其配置的工具和提示词进行回复
 
 ### 工具包选择功能说明：
-# - 创建智能体时可以通过 toolkitIds 字段选择工具包
-# - 如果不指定 toolkitIds，系统会自动分配 common-toolkit-01
+# - 创建智能体时通过 toolkits 字段选择工具包：
+#   toolkits: [{"toolkitId": "toolkit-id", "settings": {...}}]
+# - 如果不指定 toolkits 字段，系统会自动分配 common-toolkit-01
 # - common-toolkit-01 总是会被包含，即使没有明确指定
+# - 工具包设置 (settings) 可以为空对象 {} 或包含特定配置
+# - 更新智能体时，如果提供了工具包配置，会完全替换现有的工具包分配
 # - 可以通过 GET /toolkits 获取所有可用工具包（包含工具详情）
-# - 可以通过 GET /agents/{id}/toolkits 查看智能体的工具包分配
+# - 可以通过 GET /agents/{id}/toolkits 查看智能体的工具包分配（包含设置）
 # - 不存在的工具包会被自动跳过，不会影响智能体创建

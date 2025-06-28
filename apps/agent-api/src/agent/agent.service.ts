@@ -59,51 +59,84 @@ export class AgentService {
       },
     });
 
-    // 准备工具包ID列表，默认包含 common toolkit
-    const toolkitIds = createAgentDto.toolkitIds || [];
+    // 处理工具包分配
+    await this.assignToolkitsToAgent(agent.id, createAgentDto);
+
+    return agent;
+  }
+
+  private async assignToolkitsToAgent(agentId: string, dto: CreateAgentDto | UpdateAgentDto) {
     const commonToolkitId = 'common-toolkit-01';
+    const toolkitConfigs: Array<{ toolkitId: string; settings: any }> = [];
+
+    // 如果提供了工具包配置
+    if (dto.toolkits && dto.toolkits.length > 0) {
+      toolkitConfigs.push(...dto.toolkits.map(tk => ({
+        toolkitId: tk.toolkitId,
+        settings: tk.settings || {},
+      })));
+    }
 
     // 确保 common toolkit 总是被包含
-    if (!toolkitIds.includes(commonToolkitId)) {
-      toolkitIds.unshift(commonToolkitId);
+    const hasCommonToolkit = toolkitConfigs.some(tk => tk.toolkitId === commonToolkitId);
+    if (!hasCommonToolkit) {
+      toolkitConfigs.unshift({
+        toolkitId: commonToolkitId,
+        settings: {},
+      });
     }
 
     // 为智能体分配工具包
-    for (const toolkitId of toolkitIds) {
+    for (const config of toolkitConfigs) {
       try {
         // 先检查工具包是否存在
         const toolkit = await this.prisma.toolkit.findUnique({
-          where: { id: toolkitId },
+          where: { id: config.toolkitId },
         });
 
         if (toolkit) {
           await this.prisma.agentToolkit.create({
             data: {
-              agentId: agent.id,
-              toolkitId: toolkitId,
-              settings: {},
+              agentId: agentId,
+              toolkitId: config.toolkitId,
+              settings: config.settings,
             },
           });
         } else {
-          console.warn(`Warning: Toolkit ${toolkitId} not found, skipping...`);
+          console.warn(`Warning: Toolkit ${config.toolkitId} not found, skipping...`);
         }
       } catch (error) {
-        console.error(`Error assigning toolkit ${toolkitId} to agent:`, error);
+        console.error(`Error assigning toolkit ${config.toolkitId} to agent:`, error);
       }
     }
-
-    return agent;
   }
 
   async update(id: string, updateAgentDto: UpdateAgentDto) {
     await this.findOne(id);
 
-    return this.prisma.agent.update({
+    // 更新智能体基本信息
+    const agent = await this.prisma.agent.update({
       where: { id },
       data: {
-        ...updateAgentDto,
+        name: updateAgentDto.name,
+        description: updateAgentDto.description,
+        prompt: updateAgentDto.prompt,
+        options: updateAgentDto.options,
       },
     });
+
+    // 如果提供了工具包配置，则更新工具包分配
+    if (updateAgentDto.toolkits) {
+      // 先删除现有的工具包分配
+      await this.prisma.agentToolkit.deleteMany({
+        where: { agentId: id },
+      });
+
+      // 重新分配工具包
+      await this.assignToolkitsToAgent(id, updateAgentDto);
+    }
+
+    return agent;
   }
 
   async remove(id: string) {

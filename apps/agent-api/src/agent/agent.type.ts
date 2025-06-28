@@ -1,4 +1,15 @@
-import { IsString, IsOptional, IsNotEmpty, IsObject, IsArray } from 'class-validator';
+import { IsString, IsOptional, IsNotEmpty, IsObject, IsArray, ValidateNested } from 'class-validator';
+import { Type } from 'class-transformer';
+
+export class ToolkitConfigDto {
+  @IsString()
+  @IsNotEmpty()
+  toolkitId: string;
+
+  @IsObject()
+  @IsOptional()
+  settings?: any;
+}
 
 export class CreateAgentDto {
   @IsString()
@@ -19,7 +30,9 @@ export class CreateAgentDto {
 
   @IsArray()
   @IsOptional()
-  toolkitIds?: string[];
+  @ValidateNested({ each: true })
+  @Type(() => ToolkitConfigDto)
+  toolkits?: ToolkitConfigDto[];
 }
 
 export class UpdateAgentDto {
@@ -38,6 +51,12 @@ export class UpdateAgentDto {
   @IsObject()
   @IsOptional()
   options?: any;
+
+  @IsArray()
+  @IsOptional()
+  @ValidateNested({ each: true })
+  @Type(() => ToolkitConfigDto)
+  toolkits?: ToolkitConfigDto[];
 }
 
 export class ChatWithAgentDto {
