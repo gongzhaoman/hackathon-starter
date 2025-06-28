@@ -81,6 +81,7 @@ export class ToolkitsService implements OnModuleInit {
         await this.prismaService.tool.upsert({
           where: { name: tool.metadata.name },
           update: {
+            description: tool.metadata.description,
             schema: tool.metadata.parameters,
             toolkitId: toolkit.id,
           },
