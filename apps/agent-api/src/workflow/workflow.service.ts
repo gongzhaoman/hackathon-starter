@@ -1,4 +1,4 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 
 import { AgentService } from '../agent/agent.service';
 import { PrismaService } from '../prisma/prisma.service';
@@ -7,6 +7,7 @@ import { ToolsService } from '../tool/tools.service';
 import { EventBus } from './event-bus';
 import { Workflow } from './workflow';
 import { StartEvent, StopEvent } from './workflow.types';
+import { CreateWorkflowDto } from './workflow.controller';
 
 @Injectable()
 export class WorkflowService {
@@ -90,7 +91,9 @@ ${JSON.stringify(agent.output, null, 2)}
       },
     });
 
-    const prompt = `你是一个专业的DSL(领域专用语言)工作流设计专家，专门负责将用户的自然语言需求转换为标准化的AI工作流编排DSL。你需要严格遵循提供的JSON Schema规范，生成完整、可执行的工作流配置，不要输出无关的解释，直接输出符合DSL Schema规范的JSON文本。
+    const prompt = `你是一个专业的DSL(领域专用语言)工作流设计专家，专门负责将用户的自然语言需求转换为标准化的AI工作流编排DSL。
+
+**重要：你必须只输出纯JSON格式的DSL，不要包含任何解释文字、markdown代码块标记或其他内容。直接输出符合DSL Schema规范的JSON对象。**
 DSL Schema如下:
 ${JSON.stringify(dslSchema, null, 2)}
 
@@ -108,9 +111,9 @@ ${JSON.stringify(dslSchema, null, 2)}
 - **name**: 工作流显示名称，长度1-200字符
 - **description**: 功能描述，长度1-500字符
 - **version**: 协议版本号，格式：v加数字和点号组合，默认"v1"
-- **tools**: 工具名称数组，每个工具名必须以字母开头，可包含字母数字下划线
+- **tools**: 工具名称数组，每个工具名必须以字母开头，可包含字母数字下划线，只能是系统中存在的tool
 - **events**: 事件定义数组，最少2个，必须包含WORKFLOW_START和WORKFLOW_STOP
-- **steps**: 步骤处理逻辑数组，每个步骤对应一个事件的处理函数
+- **steps**: 步骤处理逻辑数组，每个步骤对应一个事件的处理函数，函数中只能使用你已经定义了的agent
 
 ### 可选字段规范
 - **agents**: 智能体定义数组，包含name、description、prompt、output、tools字段
@@ -220,7 +223,30 @@ reply的结构是agent的output字段定义的结构。
 //   };
 // }
 
-现在，请根据用户的具体工作流需求，生成一个完整、规范、可执行的AI工作流编排DSL JSON文本。`;
+现在，请根据用户的具体工作流需求，生成一个完整、规范、可执行的AI工作流编排DSL。
+
+输出要求：
+1. 只输出纯JSON格式，不要包含任何解释
+2. 不要使用markdown代码块
+3. 确保JSON格式正确，可以被JSON.parse()解析
+4. 直接以{开始，以}结束
+
+示例输出格式：
+{
+  "id": "exampleWorkflow",
+  "name": "示例工作流",
+  "description": "这是一个示例",
+  "version": "v1",
+  "tools": ["getCurrentTime"],
+  "content": {},
+  "events": [
+    {"type": "WORKFLOW_START", "data": {"input": "string"}},
+    {"type": "WORKFLOW_STOP", "data": {"output": "string"}}
+  ],
+  "steps": [
+    {"event": "WORKFLOW_START", "handle": "async (event, context) => { return {type: 'WORKFLOW_STOP', data: {output: 'result'}}; }"}
+  ]
+}`;
 
     const agent = await this.agentService.createAgentInstance(
       prompt,
@@ -231,17 +257,140 @@ reply的结构是agent的output字段定义的结构。
       eventType: StartEvent.type,
       handle: async (event, context) => {
         const reply = await agent.run(event.data.userMessage);
+        this.logger.debug('Agent reply:', JSON.stringify(reply, null, 2));
+
         try {
-          const dsl = JSON.parse(reply.data.result as string);
+          // 尝试不同的数据路径
+
+          const dslText: string = reply.data.result;
+          this.logger.debug('Attempting to parse DSL text:', dslText); // 调试信息
+
+          // 清理可能的markdown代码块
+          const cleanedText = dslText
+            .replace(/```json\s*/g, '')
+            .replace(/```\s*/g, '')
+            .trim();
+
+          const dsl = JSON.parse(cleanedText);
+
+          // 验证DSL
+          this.validateDsl(dsl);
+
           return new StopEvent({
             data: dsl,
           });
         } catch (error) {
+          this.logger.error('DSL generation failed:', error);
+          this.logger.error('Agent reply was:', JSON.stringify(reply, null, 2));
+          const errorMessage = error instanceof Error ? error.message : String(error);
           throw new Error(
-            '生成DSL失败，请重新生成，并确保输出符合DSL Schema规范',
+            `生成DSL失败: ${errorMessage}。智能体返回: ${JSON.stringify(reply, null, 2)}`,
           );
         }
       },
     });
+
+    return workflow;
+  }
+
+  async createWorkflow(createWorkflowDto: CreateWorkflowDto) {
+    // 验证 DSL 格式
+    this.validateDsl(createWorkflowDto.dsl);
+
+    // 保存到数据库
+    const workflow = await this.prismaService.workFlow.create({
+      data: {
+        name: createWorkflowDto.name,
+        description: createWorkflowDto.description || '',
+        agentToolId: '', // 这个字段可能需要调整，根据你的数据模型
+        DSL: createWorkflowDto.dsl,
+      },
+    });
+
+    return workflow;
+  }
+
+  async getAllWorkflows() {
+    return this.prismaService.workFlow.findMany({
+      where: { deleted: false },
+      orderBy: { createdAt: 'desc' },
+    });
+  }
+
+  async getWorkflow(id: string) {
+    const workflow = await this.prismaService.workFlow.findUnique({
+      where: { id, deleted: false },
+    });
+
+    if (!workflow) {
+      throw new NotFoundException(`Workflow with id ${id} not found`);
+    }
+
+    return workflow;
+  }
+
+  async executeWorkflow(id: string, input: any, context: any = {}) {
+    // 获取工作流
+    const workflowRecord = await this.getWorkflow(id);
+
+    // 从 DSL 创建工作流实例，传入初始上下文
+    const workflow = await this.fromDsl(workflowRecord.DSL);
+
+    // 执行工作流
+    const result = await workflow.execute(input);
+
+    return {
+      workflowId: id,
+      input,
+      output: result,
+      executedAt: new Date().toISOString(),
+    };
+  }
+
+  async deleteWorkflow(id: string) {
+    // 验证工作流存在
+    await this.getWorkflow(id);
+
+    return this.prismaService.workFlow.update({
+      where: { id },
+      data: { deleted: true },
+    });
+  }
+
+  private validateDsl(dsl: any) {
+    // 基本验证
+    if (!dsl || typeof dsl !== 'object') {
+      throw new Error('DSL must be a valid object');
+    }
+
+    const requiredFields = ['id', 'name', 'description', 'version', 'tools', 'events', 'steps'];
+    for (const field of requiredFields) {
+      if (!dsl[field]) {
+        throw new Error(`DSL missing required field: ${field}`);
+      }
+    }
+
+    // 验证事件
+    if (!Array.isArray(dsl.events) || dsl.events.length < 2) {
+      throw new Error('DSL must have at least 2 events');
+    }
+
+    const hasStart = dsl.events.some((e: any) => e.type === 'WORKFLOW_START');
+    const hasStop = dsl.events.some((e: any) => e.type === 'WORKFLOW_STOP');
+
+    if (!hasStart) {
+      throw new Error('DSL must have WORKFLOW_START event');
+    }
+
+    if (!hasStop) {
+      throw new Error('DSL must have WORKFLOW_STOP event');
+    }
+
+    // 验证步骤
+    if (!Array.isArray(dsl.steps) || dsl.steps.length === 0) {
+      throw new Error('DSL must have at least 1 step');
+    }
+
+    return true;
   }
 }
