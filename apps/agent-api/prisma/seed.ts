@@ -127,9 +127,19 @@ async function main() {
   console.log('🤖 智能体创建完成');
 
   // 为智能体分配工具包
+  // 时间助手：只需要 common toolkit
   await prisma.agentToolkit.create({
     data: {
       agentId: timeAssistantAgent.id,
+      toolkitId: commonToolkit.id,
+      settings: {},
+    },
+  });
+
+  // 工作流设计师：需要 common toolkit 和 tool-explorer toolkit
+  await prisma.agentToolkit.create({
+    data: {
+      agentId: workflowDesignerAgent.id,
       toolkitId: commonToolkit.id,
       settings: {},
     },
@@ -143,10 +153,19 @@ async function main() {
     },
   });
 
+  // 数据分析师：需要 common toolkit 和 tool-explorer toolkit
   await prisma.agentToolkit.create({
     data: {
       agentId: dataAnalystAgent.id,
       toolkitId: commonToolkit.id,
+      settings: {},
+    },
+  });
+
+  await prisma.agentToolkit.create({
+    data: {
+      agentId: dataAnalystAgent.id,
+      toolkitId: toolExplorerToolkit.id,
       settings: {},
     },
   });

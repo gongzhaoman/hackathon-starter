@@ -5,6 +5,10 @@
 @baseUrl = http://localhost:3001/api
 @contentType = application/json
 
+### 快速测试变量 (手动设置智能体ID)
+# 运行 GET /agents 后，从响应中复制智能体ID到这里
+@testAgentId = cmcgfusx10006y8mqo7cmpguk
+
 ### 1. 健康检查
 GET {{baseUrl}}/health
 Content-Type: {{contentType}}
@@ -13,7 +17,11 @@ Content-Type: {{contentType}}
 GET {{baseUrl}}/agents
 Content-Type: {{contentType}}
 
-### 3. 创建新的智能体 - 时间助手
+### 2a. 获取所有工具包 (包含工具详情，用于创建智能体时选择)
+GET {{baseUrl}}/toolkits
+Content-Type: {{contentType}}
+
+### 3. 创建新的智能体 - 时间助手 (带工具包选择)
 # @name createTimeAgent
 POST {{baseUrl}}/agents
 Content-Type: {{contentType}}
@@ -26,10 +34,11 @@ Content-Type: {{contentType}}
     "temperature": 0.7,
     "maxTokens": 1000,
     "model": "gpt-4o-mini"
-  }
+  },
+  "toolkitIds": ["common-toolkit-01"]
 }
 
-### 4. 创建新的智能体 - 数据分析师
+### 4. 创建新的智能体 - 数据分析师 (带工具包选择)
 # @name createDataAgent
 POST {{baseUrl}}/agents
 Content-Type: {{contentType}}
@@ -42,10 +51,12 @@ Content-Type: {{contentType}}
     "temperature": 0.3,
     "maxTokens": 1500,
     "model": "gpt-4o-mini"
-  }
+  },
+  "toolkitIds": ["common-toolkit-01", "tool-explorer-toolkit-01"]
 }
 
-### 4. 创建新的智能体 - 工作流设计师
+### 5. 创建新的智能体 - 工作流设计师 (不指定工具包，应自动分配 common toolkit)
+# @name createWorkflowAgent
 POST {{baseUrl}}/agents
 Content-Type: {{contentType}}
 
@@ -62,6 +73,18 @@ Content-Type: {{contentType}}
 
 ### 6. 获取特定智能体详情 (自动使用创建的智能体ID)
 GET {{baseUrl}}/agents/{{createTimeAgent.response.body.id}}
+Content-Type: {{contentType}}
+
+### 6a. 验证时间助手的工具包分配
+GET {{baseUrl}}/agents/{{createTimeAgent.response.body.id}}/toolkits
+Content-Type: {{contentType}}
+
+### 6b. 验证数据分析师的工具包分配
+GET {{baseUrl}}/agents/{{createDataAgent.response.body.id}}/toolkits
+Content-Type: {{contentType}}
+
+### 6c. 验证工作流设计师的工具包分配 (应该只有 common toolkit)
+GET {{baseUrl}}/agents/{{createWorkflowAgent.response.body.id}}/toolkits
 Content-Type: {{contentType}}
 
 ### 7. 更新智能体信息 (自动使用创建的智能体ID)
@@ -208,6 +231,199 @@ DELETE {{baseUrl}}/agents/{{createDocAgent.response.body.id}}
 Content-Type: {{contentType}}
 
 ### ========================================
+### 工具包选择功能测试
+### ========================================
+
+### 测试1: 创建智能体时指定多个工具包
+# @name createMultiToolkitAgent
+POST {{baseUrl}}/agents
+Content-Type: {{contentType}}
+
+{
+  "name": "多工具包测试智能体",
+  "description": "用于测试工具包选择功能的智能体",
+  "prompt": "你是一个测试智能体，拥有多个工具包的能力。",
+  "options": {
+    "temperature": 0.5,
+    "maxTokens": 1000,
+    "model": "gpt-4o-mini"
+  },
+  "toolkitIds": ["common-toolkit-01", "tool-explorer-toolkit-01"]
+}
+
+### 测试2: 验证多工具包智能体的工具包分配
+GET {{baseUrl}}/agents/{{createMultiToolkitAgent.response.body.id}}/toolkits
+Content-Type: {{contentType}}
+
+### 测试3: 创建智能体时不指定工具包（应自动分配 common toolkit）
+# @name createAutoToolkitAgent
+POST {{baseUrl}}/agents
+Content-Type: {{contentType}}
+
+{
+  "name": "自动工具包测试智能体",
+  "description": "用于测试自动分配工具包功能的智能体",
+  "prompt": "你是一个测试智能体，应该自动获得 common toolkit。",
+  "options": {
+    "temperature": 0.5,
+    "maxTokens": 1000,
+    "model": "gpt-4o-mini"
+  }
+}
+
+### 测试4: 验证自动分配的工具包（应该只有 common toolkit）
+GET {{baseUrl}}/agents/{{createAutoToolkitAgent.response.body.id}}/toolkits
+Content-Type: {{contentType}}
+
+### 测试5: 创建智能体时指定不存在的工具包（应该跳过不存在的工具包）
+# @name createInvalidToolkitAgent
+POST {{baseUrl}}/agents
+Content-Type: {{contentType}}
+
+{
+  "name": "无效工具包测试智能体",
+  "description": "用于测试无效工具包处理的智能体",
+  "prompt": "你是一个测试智能体，用于测试无效工具包的处理。",
+  "options": {
+    "temperature": 0.5,
+    "maxTokens": 1000,
+    "model": "gpt-4o-mini"
+  },
+  "toolkitIds": ["common-toolkit-01", "non-existent-toolkit", "tool-explorer-toolkit-01"]
+}
+
+### 测试6: 验证无效工具包处理（应该只有有效的工具包）
+GET {{baseUrl}}/agents/{{createInvalidToolkitAgent.response.body.id}}/toolkits
+Content-Type: {{contentType}}
+
+### 清理测试数据
+DELETE {{baseUrl}}/agents/{{createMultiToolkitAgent.response.body.id}}
+Content-Type: {{contentType}}
+
+###
+DELETE {{baseUrl}}/agents/{{createAutoToolkitAgent.response.body.id}}
+Content-Type: {{contentType}}
+
+###
+DELETE {{baseUrl}}/agents/{{createInvalidToolkitAgent.response.body.id}}
+Content-Type: {{contentType}}
+
+### ========================================
+### 智能体对话测试 (使用 seed 数据)
+### ========================================
+
+### 24a. 获取所有智能体 (查看可用的智能体ID)
+GET {{baseUrl}}/agents
+Content-Type: {{contentType}}
+
+### 24b. 快速对话测试 (手动设置智能体ID)
+# 步骤：1. 运行上面的 GET /agents 请求
+#      2. 从响应中复制一个智能体的ID
+#      3. 替换上面 @testAgentId 变量的值
+#      4. 运行下面的对话测试
+POST {{baseUrl}}/agents/{{testAgentId}}/chat
+Content-Type: {{contentType}}
+
+{
+  "message": "你好，请介绍一下你自己",
+  "context": {
+    "sessionId": "quick-test-001"
+  }
+}
+
+### 24c. 时间查询测试
+POST {{baseUrl}}/agents/{{testAgentId}}/chat
+Content-Type: {{contentType}}
+
+{
+  "message": "现在是几点？",
+  "context": {
+    "sessionId": "quick-test-002"
+  }
+}
+
+### ========================================
+### 智能体对话测试 (使用动态创建的智能体)
+### ========================================
+
+### 24. 与时间助手对话 - 查询当前时间
+POST {{baseUrl}}/agents/{{createTimeAgent.response.body.id}}/chat
+Content-Type: {{contentType}}
+
+{
+  "message": "现在北京时间是几点？",
+  "context": {
+    "sessionId": "test-session-001"
+  }
+}
+
+### 25. 与数据分析师对话 - 数据分析请求
+POST {{baseUrl}}/agents/{{createDataAgent.response.body.id}}/chat
+Content-Type: {{contentType}}
+
+{
+  "message": "请帮我分析一下这组销售数据：[100, 150, 120, 180, 200, 160, 220]，并给出趋势分析。",
+  "context": {
+    "sessionId": "test-session-002",
+    "dataType": "sales"
+  }
+}
+
+### 26. 与客服助手对话 - 客户问题处理
+POST {{baseUrl}}/agents/{{createServiceAgent.response.body.id}}/chat
+Content-Type: {{contentType}}
+
+{
+  "message": "我的订单还没有收到，订单号是12345，请帮我查询一下。",
+  "context": {
+    "sessionId": "test-session-003",
+    "customerType": "vip"
+  }
+}
+
+### 27. 与代码审查助手对话 - 代码审查
+POST {{baseUrl}}/agents/{{createCodeReviewAgent.response.body.id}}/chat
+Content-Type: {{contentType}}
+
+{
+  "message": "请审查这段代码：\n```javascript\nfunction add(a, b) {\n  return a + b;\n}\n```",
+  "context": {
+    "sessionId": "test-session-004",
+    "language": "javascript"
+  }
+}
+
+### 28. 与文档生成助手对话 - 生成API文档
+POST {{baseUrl}}/agents/{{createDocAgent.response.body.id}}/chat
+Content-Type: {{contentType}}
+
+{
+  "message": "请为一个用户管理API生成文档，包含创建、查询、更新、删除用户的接口。",
+  "context": {
+    "sessionId": "test-session-005",
+    "docType": "api"
+  }
+}
+
+### 29. 测试对话错误处理 - 不存在的智能体
+POST {{baseUrl}}/agents/non-existent-id/chat
+Content-Type: {{contentType}}
+
+{
+  "message": "这是一个测试消息",
+  "context": {}
+}
+
+### 30. 测试对话错误处理 - 空消息
+POST {{baseUrl}}/agents/{{createTimeAgent.response.body.id}}/chat
+Content-Type: {{contentType}}
+
+{
+  "message": "",
+  "context": {}
+}
+
+### ========================================
 ### 使用说明：
 ### ========================================
 # 1. 安装 VS Code 的 REST Client 扩展
@@ -215,6 +431,7 @@ Content-Type: {{contentType}}
 # 3. 先运行 seed 数据: cd apps/agent-api && pnpm run db:seed
 # 4. 按顺序执行测试，变量会自动传递
 # 5. 观察响应结果验证API功能是否正常
+# 6. 对话测试需要先创建智能体，然后使用返回的ID进行对话
 
 ### 变量说明：
 # @baseUrl: API服务的基础URL
@@ -222,3 +439,17 @@ Content-Type: {{contentType}}
 # {{createTimeAgent.response.body.id}}: 自动获取创建的智能体ID
 # {{createDataAgent.response.body.id}}: 自动获取数据分析师ID
 # 等等...
+
+### 对话测试说明：
+# - 对话接口: POST /agents/{id}/chat
+# - 请求体包含 message (必需) 和 context (可选)
+# - 响应包含智能体的回复和相关信息
+# - 智能体会根据其配置的工具和提示词进行回复
+
+### 工具包选择功能说明：
+# - 创建智能体时可以通过 toolkitIds 字段选择工具包
+# - 如果不指定 toolkitIds，系统会自动分配 common-toolkit-01
+# - common-toolkit-01 总是会被包含，即使没有明确指定
+# - 可以通过 GET /toolkits 获取所有可用工具包（包含工具详情）
+# - 可以通过 GET /agents/{id}/toolkits 查看智能体的工具包分配
+# - 不存在的工具包会被自动跳过，不会影响智能体创建

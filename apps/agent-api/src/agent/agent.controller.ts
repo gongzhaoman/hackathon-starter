@@ -9,7 +9,7 @@ import {
 } from '@nestjs/common';
 
 import { AgentService } from './agent.service';
-import { CreateAgentDto, UpdateAgentDto } from './agent.type';
+import { CreateAgentDto, UpdateAgentDto, ChatWithAgentDto } from './agent.type';
 
 @Controller('agents')
 export class AgentController {
@@ -41,5 +41,18 @@ export class AgentController {
   @Delete(':id')
   async remove(@Param('id') id: string) {
     return this.agentService.remove(id);
+  }
+
+  @Post(':id/chat')
+  async chat(
+    @Param('id') id: string,
+    @Body() chatDto: ChatWithAgentDto,
+  ) {
+    return this.agentService.chatWithAgent(id, chatDto);
+  }
+
+  @Get(':id/toolkits')
+  async getAgentToolkits(@Param('id') id: string) {
+    return this.agentService.getAgentToolkits(id);
   }
 }

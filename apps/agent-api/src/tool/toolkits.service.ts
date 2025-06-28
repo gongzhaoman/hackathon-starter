@@ -148,6 +148,18 @@ export class ToolkitsService implements OnModuleInit {
   async getAllToolkits() {
     return this.prismaService.toolkit.findMany({
       where: { deleted: false },
+      include: {
+        tools: {
+          select: {
+            id: true,
+            name: true,
+            description: true,
+          },
+        },
+      },
+      orderBy: {
+        name: 'asc',
+      },
     });
   }
 

@@ -1,4 +1,4 @@
-import { IsString, IsOptional, IsNotEmpty, IsObject } from 'class-validator';
+import { IsString, IsOptional, IsNotEmpty, IsObject, IsArray } from 'class-validator';
 
 export class CreateAgentDto {
   @IsString()
@@ -16,6 +16,10 @@ export class CreateAgentDto {
   @IsObject()
   @IsOptional()
   options?: object;
+
+  @IsArray()
+  @IsOptional()
+  toolkitIds?: string[];
 }
 
 export class UpdateAgentDto {
@@ -34,4 +38,14 @@ export class UpdateAgentDto {
   @IsObject()
   @IsOptional()
   options?: any;
+}
+
+export class ChatWithAgentDto {
+  @IsString()
+  @IsNotEmpty()
+  message: string;
+
+  @IsObject()
+  @IsOptional()
+  context?: any;
 }
