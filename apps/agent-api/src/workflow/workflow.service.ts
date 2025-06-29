@@ -282,7 +282,6 @@ reply的结构是agent的output字段定义的结构。
       eventType: StartEvent.type,
       handle: async (event, context) => {
         const reply = await agent.run(event.data.userMessage);
-        this.logger.debug('Agent reply:', JSON.stringify(reply, null, 2));
 
         try {
           // 尝试不同的数据路径
