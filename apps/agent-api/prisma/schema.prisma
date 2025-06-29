@@ -81,7 +81,6 @@ model WorkFlow {
   name      String
   description String?
   DSL       Json
-  agentToolId String
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
   deleted     Boolean  @default(false)

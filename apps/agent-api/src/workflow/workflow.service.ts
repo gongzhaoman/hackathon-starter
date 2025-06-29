@@ -347,7 +347,6 @@ const classification = JSON.parse(resultString); // 如果需要结构化数据�
       data: {
         name: createWorkflowDto.name,
         description: createWorkflowDto.description || '',
-        agentToolId: '', // 这个字段可能需要调整，根据你的数据模型
         DSL: createWorkflowDto.dsl,
       },
     });

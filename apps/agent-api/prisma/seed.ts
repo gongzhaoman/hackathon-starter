@@ -199,7 +199,6 @@ async function main() {
     data: {
       name: 'AI邮件摘要与推送',
       description: 'AI自动摘要邮件并通过企业微信推送',
-      agentToolId: dataAnalystAgent.id,
       DSL: {
         id: 'workflowMailSummarySend',
         name: 'AI邮件摘要与推送',
