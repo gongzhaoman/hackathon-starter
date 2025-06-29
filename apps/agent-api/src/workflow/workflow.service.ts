@@ -121,15 +121,25 @@ ${JSON.stringify(dslSchema, null, 2)}
 
 ### 关键约束条件
 1. **工具存在性验证（最重要）**: 必须先调用 listAllTools 工具发现可用工具，只能使用返回列表中实际存在的工具，绝对禁止使用未找到或虚构的工具
-2. **事件命名**: 必须使用大写字母和下划线格式，如TASK_COMPLETED、DATA_PROCESSED
-3. **Handle函数**: 必须严格遵循格式 async (event, context) => { ... }
-4. **工具引用**: 所有在agents或steps中使用的工具都必须在tools数组中声明，且必须是已验证存在的工具
-5. **事件匹配**: 除WORKFLOW_STOP外，所有events中定义的事件都应在steps中有对应处理
+2. **智能体工具选择**: 为每个智能体选择合适的工具，根据智能体的功能需求从已验证存在的工具中选择相关工具，避免分配不相关的工具
+3. **事件命名**: 必须使用大写字母和下划线格式，如TASK_COMPLETED、DATA_PROCESSED
+4. **Handle函数**: 必须严格遵循格式 async (event, context) => { ... }
+5. **工具引用**: 所有在agents或steps中使用的工具都必须在tools数组中声明，且必须是已验证存在的工具
+6. **事件匹配**: 除WORKFLOW_STOP外，所有events中定义的事件都应在steps中有对应处理
 
 ### Handle函数中智能体的调用方式（关键）
 你可以在 handle 函数中通过如下方式调用某个智能体进行复杂处理：
-# const reply = await AgentName.run("智能体需要处理的内容");
-reply的结构是agent的output字段定义的结构。
+# const response = await AgentName.run("智能体需要处理的内容");
+# const resultString = response.data.result;
+
+**关键：智能体运行的实际结果永远在 response.data.result 中，不是直接在 response 中！**
+**关键：response.data.result 永远是 string 类型，即使 agent 的 output 定义了复杂结构，实际返回的 result 也是字符串！**
+如果需要使用结构化数据，需要用 JSON.parse() 解析 result 字符串。
+
+示例：
+const response = await QuestionClassifier.run(customerQuestion);
+const resultString = response.data.result; // 这是字符串类型的结果
+const classification = JSON.parse(resultString); // 如果需要结构化数据，需要解析JSON
 
 ## 标准分析流程
 
@@ -197,7 +207,11 @@ reply的结构是agent的output字段定义的结构。
 - description: 功能描述（1-300字符）
 - prompt: 系统提示词（1-2000字符），详细说明任务和期望
 - output: 结构化输出格式（符合OpenAI结构化输出要求的JSON Schema）
-- tools: 该智能体可使用的工具列表（必须是已通过函数调用验证存在的工具）
+- tools: **关键！为智能体选择合适的工具**
+  * 必须从已通过 listAllTools 工具验证存在的工具列表中选择
+  * 根据智能体的具体功能需求选择相关工具
+  * 例如：时间查询智能体需要 getCurrentTime 工具，文件处理智能体需要文件操作工具
+  * 不要为智能体分配不相关的工具
 
 ### 第五步：步骤编排与实现
 
@@ -208,6 +222,7 @@ reply的结构是agent的output字段定义的结构。
 - 尽量在单个步骤中完成完整的业务逻辑
 - 优先使用直接的 WORKFLOW_START → WORKFLOW_STOP 流程
 - 只在必要时创建中间步骤和事件
+- **调用智能体时必须使用 response.data.result 获取实际结果，result 永远是 string 类型**
 - 添加必要的错误处理和异常捕获
 - 确保返回值格式正确
 
@@ -229,20 +244,15 @@ reply的结构是agent的output字段定义的结构。
 //   // 2. 从上下文读取变量（可选）
 //   const session = context.session || {};
 //
-//   // 3. 调用工具或智能体处理数据
-//   const reply = await ChatAgent.run(userMessage);
-//   const analysis = await SomeTool({
-//     input: userMessage,
-//     metadata: session
-//   });
-//
-//   context.lastReply = reply.text;
-//   context.analysisResult = analysis;
+//   // 3. 调用智能体处理数据
+//   const response = await ChatAgent.run(userMessage);
+//   const resultString = response.data.result;
+//   const parsedResult = JSON.parse(resultString);
 //
 //   return {
 //     type: 'NEXT_EVENT',
 //     data: {
-//       processedData: analysis,
+//       processedData: parsedResult,
 //     }
 //   };
 // }
@@ -251,10 +261,12 @@ reply的结构是agent的output字段定义的结构。
 
 输出要求：
 1. **只能使用返回列表中已验证存在的工具**
-2. 只输出纯JSON格式，不要包含任何解释
-3. 不要使用markdown代码块
-4. 确保JSON格式正确，可以被JSON.parse()解析
-5. 直接以{开始，以}结束
+2. **为智能体选择合适的工具，根据功能需求匹配相关工具**
+3. **调用智能体时必须使用 response.data.result 获取实际结果，result 永远是 string 类型，如需结构化数据请使用 JSON.parse()**
+4. 只输出纯JSON格式，不要包含任何解释
+5. 不要使用markdown代码块
+6. 确保JSON格式正确，可以被JSON.parse()解析
+7. 直接以{开始，以}结束
 
 示例输出格式：
 {
@@ -263,13 +275,22 @@ reply的结构是agent的output字段定义的结构。
   "description": "这是一个示例",
   "version": "v1",
   "tools": ["getCurrentTime"],
+  "agents": [
+    {
+      "name": "DataProcessor",
+      "description": "处理输入数据并获取当前时间",
+      "prompt": "你是数据处理专家，请分析输入数据并获取当前时间进行时间戳标记",
+      "output": {"result": "string", "timestamp": "string"},
+      "tools": ["getCurrentTime"]
+    }
+  ],
   "content": {},
   "events": [
     {"type": "WORKFLOW_START", "data": {"input": "string"}},
     {"type": "WORKFLOW_STOP", "data": {"output": "string"}}
   ],
   "steps": [
-    {"event": "WORKFLOW_START", "handle": "async (event, context) => { const result = await getCurrentTime(); return {type: 'WORKFLOW_STOP', data: {output: result}}; }"}
+    {"event": "WORKFLOW_START", "handle": "async (event, context) => { const response = await DataProcessor.run(event.data.input); const resultString = response.data.result; const parsedResult = JSON.parse(resultString); return {type: 'WORKFLOW_STOP', data: {output: parsedResult.result, timestamp: parsedResult.timestamp}}; }"}
   ]
 }`;
 

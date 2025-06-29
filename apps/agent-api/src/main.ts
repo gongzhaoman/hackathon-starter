@@ -8,9 +8,12 @@ async function bootstrap() {
 
   // 启用CORS
   app.enableCors({
-    origin: ['http://localhost:3000', 'http://localhost:3001'],
+    origin: [
+      'http://localhost:5179',
+    ],
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH'],
     allowedHeaders: ['Content-Type', 'Authorization'],
+    credentials: true, // 允许携带凭证
   });
 
   // 启用全局验证管道
