@@ -354,6 +354,8 @@ docker system prune -a
 
 本项目采用 MIT 许可证 - 查看 [LICENSE](LICENSE) 文件了解详情。
 
+agent-api agent-web 暂不采用 MIT 许可证，后续将移植到单独的仓库，规划采用主流工作流框架相同的许可方式。
+
 ## 🙋‍♂️ 支持
 
 如果您在使用过程中遇到问题：
