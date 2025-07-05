@@ -1,5 +1,4 @@
 import { PrismaService } from '../../prisma/prisma.service';
-import { LlamaindexService } from '../../llamaindex/llamaindex.service';
 
 import { toolkitId } from '../toolkits.decorator';
 import { BaseToolkit } from './base-toolkit';

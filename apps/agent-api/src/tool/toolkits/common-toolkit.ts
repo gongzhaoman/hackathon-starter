@@ -2,7 +2,6 @@ import { Logger } from '@nestjs/common';
 import dayjs from 'dayjs';
 import timezone from 'dayjs/plugin/timezone';
 import utc from 'dayjs/plugin/utc';
-import { LlamaindexService } from '../../llamaindex/llamaindex.service';
 
 import { toolkitId } from '../toolkits.decorator';
 import { BaseToolkit } from './base-toolkit';
