@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { apiClient } from '../lib/api';
 import { queryKeys } from '../lib/query-keys';
-import type { Agent, CreateAgentDto, ChatWithAgentDto } from '../types';
+import type { CreateAgentDto, ChatWithAgentDto } from '../types';
 
 // Query Options - 分离查询选项和 hooks
 export const agentQueryOptions = {

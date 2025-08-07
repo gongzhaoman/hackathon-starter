@@ -9,6 +9,7 @@ export interface Agent {
   updatedAt: string;
   deleted: boolean;
   agentToolkits?: AgentToolkit[];
+  agentKnowledgeBases?: AgentKnowledgeBase[];
 }
 
 export interface Toolkit {
@@ -34,6 +35,13 @@ export interface AgentToolkit {
   toolkitId: string;
   settings: any;
   toolkit: Toolkit;
+}
+
+export interface AgentKnowledgeBase {
+  id: string;
+  agentId: string;
+  knowledgeBaseId: string;
+  knowledgeBase: KnowledgeBase;
 }
 
 export interface Workflow {
@@ -64,6 +72,7 @@ export interface CreateAgentDto {
   prompt: string;
   options?: any;
   toolkits?: ToolkitConfigDto[];
+  knowledgeBases?: string[];
 }
 
 export interface ChatWithAgentDto {
@@ -84,4 +93,40 @@ export interface CreateWorkflowDto {
 export interface ExecuteWorkflowDto {
   input: any;
   context?: any;
+}
+
+// Knowledge Base Types
+export interface KnowledgeBase {
+  id: string;
+  name: string;
+  description?: string;
+  vectorStoreName: string;
+  createdById: string;
+  createdAt: string;
+  updatedAt: string;
+  files?: KnowledgeBaseFile[];
+}
+
+export interface KnowledgeBaseFile {
+  id: string;
+  name: string;
+  path: string;
+  status: 'PENDING' | 'PROCESSING' | 'COMPLETED' | 'FAILED';
+  knowledgeBaseId: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CreateKnowledgeBaseDto {
+  name: string;
+  description?: string;
+}
+
+export interface UpdateKnowledgeBaseDto {
+  name?: string;
+  description?: string;
+}
+
+export interface ChatWithKnowledgeBaseDto {
+  message: string;
 }

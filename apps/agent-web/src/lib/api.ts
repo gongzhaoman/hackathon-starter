@@ -2,11 +2,15 @@ import type {
   Agent,
   Toolkit,
   Workflow,
+  KnowledgeBase,
   CreateAgentDto,
   ChatWithAgentDto,
   GenerateDslDto,
   CreateWorkflowDto,
-  ExecuteWorkflowDto
+  ExecuteWorkflowDto,
+  CreateKnowledgeBaseDto,
+  UpdateKnowledgeBaseDto,
+  ChatWithKnowledgeBaseDto
 } from '../types';
 
 const API_BASE_URL = 'http://localhost:3001/api';
@@ -147,6 +151,58 @@ class ApiClient {
 
   async deleteWorkflow(id: string): Promise<void> {
     return this.delete<void>(`workflows/${id}`);
+  }
+
+  // Knowledge Base APIs
+  async getKnowledgeBases(): Promise<KnowledgeBase[]> {
+    return this.get<KnowledgeBase[]>('knowledge-base');
+  }
+
+  async getKnowledgeBase(id: string): Promise<KnowledgeBase> {
+    return this.get<KnowledgeBase>(`knowledge-base/${id}`);
+  }
+
+  async createKnowledgeBase(data: CreateKnowledgeBaseDto): Promise<KnowledgeBase> {
+    return this.post<KnowledgeBase>('knowledge-base', data);
+  }
+
+  async updateKnowledgeBase(id: string, data: UpdateKnowledgeBaseDto): Promise<KnowledgeBase> {
+    return this.put<KnowledgeBase>(`knowledge-base/${id}`, data);
+  }
+
+  async deleteKnowledgeBase(id: string): Promise<void> {
+    return this.delete<void>(`knowledge-base/${id}`);
+  }
+
+  async uploadFileToKnowledgeBase(knowledgeBaseId: string, file: File): Promise<any> {
+    const formData = new FormData();
+    formData.append('file', file);
+
+    return this.request<any>(`knowledge-base/${knowledgeBaseId}/files`, {
+      method: 'POST',
+      body: formData,
+      headers: {}, // 不设置 Content-Type，让浏览器自动设置
+    });
+  }
+
+  async trainKnowledgeBaseFile(knowledgeBaseId: string, fileId: string): Promise<any> {
+    return this.post<any>(`knowledge-base/${knowledgeBaseId}/files/${fileId}/train`);
+  }
+
+  async deleteKnowledgeBaseFile(knowledgeBaseId: string, fileId: string): Promise<void> {
+    return this.delete<void>(`knowledge-base/${knowledgeBaseId}/files/${fileId}`);
+  }
+
+  async queryKnowledgeBase(knowledgeBaseId: string, data: ChatWithKnowledgeBaseDto): Promise<any> {
+    return this.post<any>(`knowledge-base/${knowledgeBaseId}/query`, data);
+  }
+
+  async linkKnowledgeBaseToAgent(knowledgeBaseId: string, agentId: string): Promise<any> {
+    return this.post<any>(`knowledge-base/${knowledgeBaseId}/agents`, { agentId });
+  }
+
+  async unlinkKnowledgeBaseFromAgent(knowledgeBaseId: string, agentId: string): Promise<void> {
+    return this.delete<void>(`knowledge-base/${knowledgeBaseId}/agents/${agentId}`);
   }
 }
 

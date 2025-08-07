@@ -16,7 +16,26 @@ export class AgentService {
 
   async findAll() {
     return this.prisma.agent.findMany({
-      where: { deleted: false },
+      where: {
+        deleted: false,
+        isWorkflowGenerated: false  // 只返回用户创建的智能体，隐藏工作流生成的智能体
+      },
+      include: {
+        agentToolkits: {
+          include: {
+            toolkit: {
+              include: {
+                tools: true,
+              },
+            },
+          },
+        },
+        agentKnowledgeBases: {
+          include: {
+            knowledgeBase: true,
+          },
+        },
+      },
     });
   }
 
@@ -36,6 +55,11 @@ export class AgentService {
                 tools: true,
               },
             },
+          },
+        },
+        agentKnowledgeBases: {
+          include: {
+            knowledgeBase: true,
           },
         },
       },
@@ -61,6 +85,9 @@ export class AgentService {
 
     // 处理工具包分配
     await this.assignToolkitsToAgent(agent.id, createAgentDto);
+
+    // 处理知识库分配
+    await this.assignKnowledgeBasesToAgent(agent.id, createAgentDto);
 
     return agent;
   }
@@ -107,6 +134,33 @@ export class AgentService {
         }
       } catch (error) {
         console.error(`Error assigning toolkit ${config.toolkitId} to agent:`, error);
+      }
+    }
+  }
+
+  private async assignKnowledgeBasesToAgent(agentId: string, dto: CreateAgentDto | UpdateAgentDto) {
+    // 如果提供了知识库配置
+    if (dto.knowledgeBases && dto.knowledgeBases.length > 0) {
+      for (const kbId of dto.knowledgeBases) {
+        try {
+          // 先检查知识库是否存在
+          const knowledgeBase = await this.prisma.knowledgeBase.findUnique({
+            where: { id: kbId },
+          });
+
+          if (knowledgeBase) {
+            await this.prisma.agentKnowledgeBase.create({
+              data: {
+                agentId: agentId,
+                knowledgeBaseId: kbId,
+              },
+            });
+          } else {
+            console.warn(`Warning: Knowledge base ${kbId} not found, skipping...`);
+          }
+        } catch (error) {
+          console.error(`Error assigning knowledge base ${kbId} to agent:`, error);
+        }
       }
     }
   }

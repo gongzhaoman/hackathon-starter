@@ -5,7 +5,7 @@ import { Button } from '@workspace/ui/components/button'
 const navigation = [
   { name: '仪表板', href: '/', icon: '📊' },
   { name: '工具包', href: '/toolkits', icon: '🛠️' },
-  { name: '知识库', href: '/knowledge', icon: '📚' },
+  { name: '知识库', href: '/knowledge-bases', icon: '📚' },
   { name: '智能体', href: '/agents', icon: '🤖' },
   { name: '工作流', href: '/workflows', icon: '⚡' },
 ]

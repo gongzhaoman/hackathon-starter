@@ -24,6 +24,12 @@ export const queryKeys = {
   workflowExecution: (workflowId: string) => [...queryKeys.all, 'workflows', workflowId, 'execution'] as const,
   workflowDslGeneration: () => [...queryKeys.all, 'workflows', 'dsl-generation'] as const,
 
+  // 知识库相关查询
+  knowledgeBases: (params?: Record<string, unknown>) => [...queryKeys.all, 'knowledge-bases', params] as const,
+  knowledgeBase: (id: string) => [...queryKeys.all, 'knowledge-bases', id] as const,
+  knowledgeBaseFiles: (kbId: string) => [...queryKeys.all, 'knowledge-bases', kbId, 'files'] as const,
+  knowledgeBaseQuery: (kbId: string) => [...queryKeys.all, 'knowledge-bases', kbId, 'query'] as const,
+
   // 统计数据相关查询
   dashboardStats: () => [...queryKeys.all, 'stats', 'dashboard'] as const,
 } as const;

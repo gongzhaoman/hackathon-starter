@@ -245,12 +245,44 @@ async function main() {
 
   console.log('📋 工作流创建完成');
 
+  // 创建示例知识库
+  const productKnowledgeBase = await prisma.knowledgeBase.create({
+    data: {
+      name: '产品知识库',
+      description: '包含产品功能、使用说明和常见问题的知识库',
+      vectorStoreName: 'kb_system_product',
+      createdById: 'system',
+    },
+  });
+
+  const legalKnowledgeBase = await prisma.knowledgeBase.create({
+    data: {
+      name: '法律条文知识库',
+      description: '包含相关法律法规和条文的知识库',
+      vectorStoreName: 'kb_system_legal',
+      createdById: 'system',
+    },
+  });
+
+  console.log('📚 知识库创建完成');
+
+  // 为智能体分配知识库（示例）
+  await prisma.agentKnowledgeBase.create({
+    data: {
+      agentId: timeAssistantAgent.id,
+      knowledgeBaseId: productKnowledgeBase.id,
+    },
+  });
+
+  console.log('🔗 知识库关联完成');
+
   console.log('✅ 数据播种完成！');
   console.log(`📊 创建的数据统计:`);
   console.log(`   - 工具包: 2 个`);
   console.log(`   - 工具: 3 个`);
   console.log(`   - 智能体: 3 个`);
   console.log(`   - 工作流: 1 个`);
+  console.log(`   - 知识库: 2 个`);
 }
 
 main()

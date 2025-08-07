@@ -8,16 +8,20 @@ datasource db {
 }
 
 model Agent {
-  id             String        @id @default(cuid())
-  name           String
-  description    String?
-  prompt         String
-  options        Json
-  agentToolkits  AgentToolkit[]
-  agentTools     AgentTool[]
-  createdAt      DateTime      @default(now())
-  updatedAt      DateTime      @updatedAt
-  deleted        Boolean       @default(false)
+  id                   String                 @id @default(cuid())
+  name                 String
+  description          String?
+  prompt               String
+  options              Json
+  agentToolkits        AgentToolkit[]
+  agentTools           AgentTool[]
+  agentKnowledgeBases  AgentKnowledgeBase[]
+  workflowAgents       WorkflowAgent[]
+  createdById          String?
+  isWorkflowGenerated  Boolean                @default(false)
+  createdAt            DateTime               @default(now())
+  updatedAt            DateTime               @updatedAt
+  deleted              Boolean                @default(false)
 
   @@map("agents")
 }
@@ -85,5 +89,70 @@ model WorkFlow {
   updatedAt   DateTime @updatedAt
   deleted     Boolean  @default(false)
 
+  // 工作流关联的智能体
+  workflowAgents WorkflowAgent[]
+
   @@map("workflows")
+}
+
+// 工作流智能体关联表
+model WorkflowAgent {
+  id         String   @id @default(cuid())
+  workflowId String
+  agentId    String
+  agentName  String   // DSL 中的智能体名称
+  createdAt  DateTime @default(now())
+
+  workflow   WorkFlow @relation(fields: [workflowId], references: [id], onDelete: Cascade)
+  agent      Agent    @relation(fields: [agentId], references: [id], onDelete: Cascade)
+
+  @@unique([workflowId, agentName])
+  @@map("workflow_agents")
+}
+
+model KnowledgeBase {
+  id                   String                 @id @default(cuid())
+  name                 String
+  description          String?
+  vectorStoreName      String                 @unique
+  createdById          String?
+  agentKnowledgeBases  AgentKnowledgeBase[]
+  files                File[]
+  createdAt            DateTime               @default(now())
+  updatedAt            DateTime               @updatedAt
+
+  @@map("knowledge_bases")
+}
+
+model AgentKnowledgeBase {
+  id              String        @id @default(cuid())
+  agent           Agent         @relation(fields: [agentId], references: [id])
+  agentId         String
+  knowledgeBase   KnowledgeBase @relation(fields: [knowledgeBaseId], references: [id])
+  knowledgeBaseId String
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+
+  @@unique([agentId, knowledgeBaseId])
+  @@map("agent_knowledge_bases")
+}
+
+model File {
+  id              String        @id @default(cuid())
+  name            String
+  path            String
+  status          FileStatus    @default(PENDING)
+  knowledgeBase   KnowledgeBase @relation(fields: [knowledgeBaseId], references: [id])
+  knowledgeBaseId String
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+
+  @@map("files")
+}
+
+enum FileStatus {
+  PENDING
+  PROCESSING
+  PROCESSED
+  FAILED
 }

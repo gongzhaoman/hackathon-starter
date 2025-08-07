@@ -30,11 +30,11 @@
   "steps": [
     {
       "event": "WORKFLOW_START",
-      "handle": "async (event, context) => { const { summary } = await mailSummarizerAgent({ emailContent: event.data.emailContent }); return { type: 'SUMMARY_DONE', data: { summary } }; }"
+      "handle": "async (event, context) => { const response = await mailSummarizerAgent.run(event.data.emailContent); const resultString = response.data.result; const parsedResult = JSON.parse(resultString); return { type: 'SUMMARY_DONE', data: { summary: parsedResult.summary } }; }"
     },
     {
       "event": "SUMMARY_DONE",
-      "handle": "async (event, context) => { const sendResult = await sendWeCom({ text: event.data.summary }); return { type: 'WORKFLOW_STOP', data: { sendResult } }; }"
+      "handle": "async (event, context) => { const sendResult = await sendWeCom.call({ text: event.data.summary }); return { type: 'WORKFLOW_STOP', data: { sendResult } }; }"
     }
   ]
 }

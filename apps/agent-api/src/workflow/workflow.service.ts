@@ -20,7 +20,7 @@ export class WorkflowService {
     private readonly prismaService: PrismaService,
   ) {}
 
-  async fromDsl(dsl: any): Promise<Workflow> {
+  async fromDsl(dsl: any, workflowId?: string): Promise<Workflow> {
     const workflow = new Workflow<any, any, any>(this.eventBus, {});
 
     const toolsRegistry = new Map<string, any>();
@@ -31,14 +31,109 @@ export class WorkflowService {
     }
 
     const agentsRegistry = new Map<string, any>();
+
     for (const agent of dsl.agents ?? []) {
       const prompt = `${agent.prompt}
 永远按照下面的JSON结构生成内容，不要有其他无关的解释。
 ${JSON.stringify(agent.output, null, 2)}
       `;
+
+      let persistentAgent: any;
+      let tools = agent.tools || [];
+
+      // 如果有 workflowId，尝试查找已存在的工作流智能体
+      if (workflowId) {
+        const existingWorkflowAgent = await this.prismaService.workflowAgent.findFirst({
+          where: {
+            workflowId: workflowId,
+            agentName: agent.name,
+          },
+          include: {
+            agent: true,
+          },
+        });
+
+        if (existingWorkflowAgent) {
+          persistentAgent = existingWorkflowAgent.agent;
+          this.logger.log(`Found existing workflow agent: ${agent.name} (${persistentAgent.id})`);
+        }
+      }
+
+      // 如果没有找到现有智能体，创建新的持久化智能体
+      if (!persistentAgent) {
+        persistentAgent = await this.prismaService.agent.create({
+          data: {
+            name: workflowId ? `${workflowId}_${agent.name}` : `workflow_${agent.name}_${Date.now()}`,
+            description: agent.description || `工作流智能体: ${agent.name}`,
+            prompt: agent.prompt,
+            options: agent.output || {},
+            createdById: 'workflow-system',
+            isWorkflowGenerated: true,  // 标记为工作流生成的智能体
+          },
+        });
+
+        this.logger.log(`Created new workflow agent: ${agent.name} (${persistentAgent.id})`);
+
+        // 如果有 workflowId，创建工作流智能体关联
+        if (workflowId) {
+          await this.prismaService.workflowAgent.create({
+            data: {
+              workflowId: workflowId,
+              agentId: persistentAgent.id,
+              agentName: agent.name,
+            },
+          });
+        }
+      }
+
+      // 处理知识库关联
+      if (agent.knowledgeBases && agent.knowledgeBases.length > 0) {
+        // 清理现有的知识库关联（如果是更新）
+        await this.prismaService.agentKnowledgeBase.deleteMany({
+          where: { agentId: persistentAgent.id },
+        });
+
+        // 重新链接知识库
+        for (const kbId of agent.knowledgeBases) {
+          try {
+            await this.prismaService.agentKnowledgeBase.create({
+              data: {
+                agentId: persistentAgent.id,
+                knowledgeBaseId: kbId,
+              },
+            });
+          } catch (error) {
+            this.logger.warn(`Failed to link knowledge base ${kbId} to agent ${persistentAgent.id}:`, error);
+          }
+        }
+
+        // 确保知识库工具包存在
+        const existingKbToolkit = await this.prismaService.agentToolkit.findFirst({
+          where: {
+            agentId: persistentAgent.id,
+            toolkitId: 'knowledge-base-toolkit-01',
+          },
+        });
+
+        if (!existingKbToolkit) {
+          await this.prismaService.agentToolkit.create({
+            data: {
+              agentId: persistentAgent.id,
+              toolkitId: 'knowledge-base-toolkit-01',
+              settings: { agentId: persistentAgent.id },
+            },
+          });
+        }
+
+        // 获取知识库工具
+        const kbTools = await this.toolsService.getAgentTools(persistentAgent.id);
+        const kbToolNames = kbTools.map(tool => tool.name);
+        tools = [...tools, ...kbToolNames];
+      }
+
       agentsRegistry.set(
         agent.name,
-        await this.agentService.createAgentInstance(prompt, agent.tools),
+        await this.agentService.createAgentInstance(prompt, tools),
       );
     }
 
@@ -116,24 +211,36 @@ ${JSON.stringify(dslSchema, null, 2)}
 - **steps**: 步骤处理逻辑数组，每个步骤对应一个事件的处理函数，函数中只能使用你已经定义了的agent
 
 ### 可选字段规范
-- **agents**: 智能体定义数组，包含name、description、prompt、output、tools字段
+- **agents**: 智能体定义数组，包含name、description、prompt、output、tools、knowledgeBases字段
 - **content**: 工作流上下文数据对象，可为空
 
 ### 关键约束条件
 1. **工具存在性验证（最重要）**: 必须先调用 listAllTools 工具发现可用工具，只能使用返回列表中实际存在的工具，绝对禁止使用未找到或虚构的工具
-2. **智能体工具选择**: 为每个智能体选择合适的工具，根据智能体的功能需求从已验证存在的工具中选择相关工具，避免分配不相关的工具
-3. **事件命名**: 必须使用大写字母和下划线格式，如TASK_COMPLETED、DATA_PROCESSED
-4. **Handle函数**: 必须严格遵循格式 async (event, context) => { ... }
-5. **工具引用**: 所有在agents或steps中使用的工具都必须在tools数组中声明，且必须是已验证存在的工具
-6. **事件匹配**: 除WORKFLOW_STOP外，所有events中定义的事件都应在steps中有对应处理
+2. **知识库发现验证**: 如果需要使用知识库，必须先调用 listAllKnowledgeBases 工具发现可用知识库，只能使用返回列表中实际存在的知识库
+3. **智能体工具选择**: 为每个智能体选择合适的工具，根据智能体的功能需求从已验证存在的工具中选择相关工具，避免分配不相关的工具
+4. **智能体知识库选择**: 为每个智能体选择合适的知识库，根据智能体的功能需求从已验证存在的知识库中选择相关知识库
+5. **事件命名**: 必须使用大写字母和下划线格式，如TASK_COMPLETED、DATA_PROCESSED
+6. **Handle函数**: 必须严格遵循格式 async (event, context) => { ... }
+7. **工具引用**: 所有在agents或steps中使用的工具都必须在tools数组中声明，且必须是已验证存在的工具
+8. **事件匹配**: 除WORKFLOW_STOP外，所有events中定义的事件都应在steps中有对应处理
 
-### Handle函数中智能体的调用方式（关键）
+### Handle函数中工具和智能体的调用方式（关键）
+
+**工具调用方式：**
+工具在 handle 函数中作为参数传递，调用方式如下：
+# const toolResult = await toolName.call({ param1: value1, param2: value2 });
+
+示例：
+const timeResult = await getCurrentTime.call({ timezone: "Asia/Shanghai" });
+
+**智能体调用方式：**
 你可以在 handle 函数中通过如下方式调用某个智能体进行复杂处理：
 # const response = await AgentName.run("智能体需要处理的内容");
 # const resultString = response.data.result;
 
 **关键：智能体运行的实际结果永远在 response.data.result 中，不是直接在 response 中！**
 **关键：response.data.result 永远是 string 类型，即使 agent 的 output 定义了复杂结构，实际返回的 result 也是字符串！**
+**关键：智能体的 run 方法直接传入字符串参数，不需要包装成对象！**
 如果需要使用结构化数据，需要用 JSON.parse() 解析 result 字符串。
 
 示例：
@@ -158,10 +265,12 @@ const classification = JSON.parse(resultString); // 如果需要结构化数据�
 
 **重要约束：只能使用系统中实际存在的工具，绝对不能使用未找到的工具！**
 
-工具发现流程：
+工具和知识库发现流程：
 1. **必须先调用 listAllTools 工具**：获取系统中所有可用业务工具的完整列表（不包含查询工具本身）
-2. **详细了解工具功能**：对于可能需要的工具，调用 checkToolDetail 工具获取具体信息
-3. **严格验证工具存在性**：只能在DSL中使用通过 listAllTools 确认存在的业务工具
+2. **如需知识库，调用 listAllKnowledgeBases 工具**：获取系统中所有可用知识库的完整列表
+3. **详细了解工具功能**：对于可能需要的工具，调用 checkToolDetail 工具获取具体信息
+4. **详细了解知识库功能**：对于可能需要的知识库，调用 checkKnowledgeBaseDetail 工具获取具体信息
+5. **严格验证存在性**：只能在DSL中使用通过相应工具确认存在的工具和知识库
 
 工具选择原则：
 - 仅从已发现的工具列表中选择
@@ -212,6 +321,11 @@ const classification = JSON.parse(resultString); // 如果需要结构化数据�
   * 根据智能体的具体功能需求选择相关工具
   * 例如：时间查询智能体需要 getCurrentTime 工具，文件处理智能体需要文件操作工具
   * 不要为智能体分配不相关的工具
+- knowledgeBases: **可选！为智能体选择合适的知识库**
+  * 必须从已通过 listAllKnowledgeBases 工具验证存在的知识库列表中选择
+  * 根据智能体的具体功能需求选择相关知识库
+  * 例如：客服智能体需要产品知识库，法务智能体需要法律条文知识库
+  * 只有需要查询特定领域知识时才分配知识库
 
 ### 第五步：步骤编排与实现
 
@@ -244,7 +358,10 @@ const classification = JSON.parse(resultString); // 如果需要结构化数据�
 //   // 2. 从上下文读取变量（可选）
 //   const session = context.session || {};
 //
-//   // 3. 调用智能体处理数据
+//   // 3. 调用工具（工具作为参数传递）
+//   const timeResult = await getCurrentTime.call({ timezone: "Asia/Shanghai" });
+//
+//   // 4. 调用智能体处理数据
 //   const response = await ChatAgent.run(userMessage);
 //   const resultString = response.data.result;
 //   const parsedResult = JSON.parse(resultString);
@@ -253,6 +370,7 @@ const classification = JSON.parse(resultString); // 如果需要结构化数据�
 //     type: 'NEXT_EVENT',
 //     data: {
 //       processedData: parsedResult,
+//       currentTime: timeResult
 //     }
 //   };
 // }
@@ -260,13 +378,14 @@ const classification = JSON.parse(resultString); // 如果需要结构化数据�
 现在，请根据用户的具体工作流需求，生成一个完整、规范、可执行的AI工作流编排DSL。
 
 输出要求：
-1. **只能使用返回列表中已验证存在的工具**
+1. **只能使用返回列表中已验证存在的工具和知识库**
 2. **为智能体选择合适的工具，根据功能需求匹配相关工具**
-3. **调用智能体时必须使用 response.data.result 获取实际结果，result 永远是 string 类型，如需结构化数据请使用 JSON.parse()**
-4. 只输出纯JSON格式，不要包含任何解释
-5. 不要使用markdown代码块
-6. 确保JSON格式正确，可以被JSON.parse()解析
-7. 直接以{开始，以}结束
+3. **为智能体选择合适的知识库，根据功能需求匹配相关知识库**
+4. **调用智能体时必须使用 response.data.result 获取实际结果，result 永远是 string 类型，如需结构化数据请使用 JSON.parse()**
+5. 只输出纯JSON格式，不要包含任何解释
+6. 不要使用markdown代码块
+7. 确保JSON格式正确，可以被JSON.parse()解析
+8. 直接以{开始，以}结束
 
 示例输出格式：
 {
@@ -377,8 +496,8 @@ const classification = JSON.parse(resultString); // 如果需要结构化数据�
     // 获取工作流
     const workflowRecord = await this.getWorkflow(id);
 
-    // 从 DSL 创建工作流实例，传入初始上下文
-    const workflow = await this.fromDsl(workflowRecord.DSL);
+    // 从 DSL 创建工作流实例，传入工作流 ID 以支持智能体持久化
+    const workflow = await this.fromDsl(workflowRecord.DSL, id);
 
     // 执行工作流
     const result = await workflow.execute(input);
@@ -390,6 +509,78 @@ const classification = JSON.parse(resultString); // 如果需要结构化数据�
       executedAt: new Date().toISOString(),
     };
   }
+
+  // 获取工作流关联的智能体
+  async getWorkflowAgents(workflowId: string) {
+    return this.prismaService.workflowAgent.findMany({
+      where: { workflowId },
+      include: {
+        agent: {
+          include: {
+            agentKnowledgeBases: {
+              include: {
+                knowledgeBase: true,
+              },
+            },
+            agentToolkits: {
+              include: {
+                toolkit: true,
+              },
+            },
+          },
+        },
+      },
+    });
+  }
+
+  // 删除工作流时清理关联的智能体
+  async deleteWorkflowAgents(workflowId: string) {
+    const workflowAgents = await this.prismaService.workflowAgent.findMany({
+      where: { workflowId },
+      include: { agent: true },
+    });
+
+    // 删除智能体记录
+    for (const workflowAgent of workflowAgents) {
+      await this.prismaService.agent.delete({
+        where: { id: workflowAgent.agentId },
+      });
+    }
+
+    // 删除工作流智能体关联记录
+    await this.prismaService.workflowAgent.deleteMany({
+      where: { workflowId },
+    });
+  }
+
+  // 更新工作流智能体并同步 DSL
+  async updateWorkflowAgent(workflowId: string, agentName: string, agentData: any) {
+    // 获取工作流智能体
+    const workflowAgent = await this.prismaService.workflowAgent.findFirst({
+      where: { workflowId, agentName },
+      include: { agent: true },
+    });
+
+    if (!workflowAgent) {
+      throw new Error(`Workflow agent ${agentName} not found`);
+    }
+
+    // 更新智能体
+    const updatedAgent = await this.prismaService.agent.update({
+      where: { id: workflowAgent.agentId },
+      data: {
+        prompt: agentData.prompt,
+        description: agentData.description,
+        options: agentData.options,
+        updatedAt: new Date(),
+      },
+    });
+
+    // 不再同步更新 DSL，保持 DSL 稳定
+    return updatedAgent;
+  }
+
+
 
   async deleteWorkflow(id: string) {
     // 验证工作流存在

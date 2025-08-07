@@ -1,4 +1,4 @@
-import { Body, Controller, Post, Get, Param, Delete } from '@nestjs/common';
+import { Body, Controller, Post, Get, Param, Delete, Put } from '@nestjs/common';
 import { IsString, IsNotEmpty, IsObject, IsOptional } from 'class-validator';
 
 import { WorkflowService } from './workflow.service';
@@ -32,6 +32,26 @@ export class ExecuteWorkflowDto {
   @IsObject()
   @IsOptional()
   context?: any;
+}
+
+export class UpdateWorkflowDslDto {
+  @IsObject()
+  @IsNotEmpty()
+  dsl!: any;
+}
+
+export class UpdateWorkflowAgentDto {
+  @IsString()
+  @IsOptional()
+  prompt?: string;
+
+  @IsString()
+  @IsOptional()
+  description?: string;
+
+  @IsObject()
+  @IsOptional()
+  options?: any;
 }
 
 @Controller('workflows')
@@ -75,8 +95,27 @@ export class WorkflowController {
     return this.workflowService.executeWorkflow(id, executeDto.input, executeDto.context);
   }
 
+  @Get(':id/agents')
+  async getWorkflowAgents(@Param('id') id: string) {
+    return this.workflowService.getWorkflowAgents(id);
+  }
+
+  @Put(':id/agents/:agentName')
+  async updateWorkflowAgent(
+    @Param('id') workflowId: string,
+    @Param('agentName') agentName: string,
+    @Body() updateDto: UpdateWorkflowAgentDto,
+  ) {
+    return this.workflowService.updateWorkflowAgent(workflowId, agentName, updateDto);
+  }
+
+
+
   @Delete(':id')
   async deleteWorkflow(@Param('id') id: string) {
+    // 先清理关联的智能体
+    await this.workflowService.deleteWorkflowAgents(id);
+    // 再删除工作流
     return this.workflowService.deleteWorkflow(id);
   }
 }

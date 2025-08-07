@@ -33,6 +33,11 @@ export class CreateAgentDto {
   @ValidateNested({ each: true })
   @Type(() => ToolkitConfigDto)
   toolkits?: ToolkitConfigDto[];
+
+  @IsArray()
+  @IsOptional()
+  @IsString({ each: true })
+  knowledgeBases?: string[];
 }
 
 export class UpdateAgentDto {
@@ -57,6 +62,11 @@ export class UpdateAgentDto {
   @ValidateNested({ each: true })
   @Type(() => ToolkitConfigDto)
   toolkits?: ToolkitConfigDto[];
+
+  @IsArray()
+  @IsOptional()
+  @IsString({ each: true })
+  knowledgeBases?: string[];
 }
 
 export class ChatWithAgentDto {
