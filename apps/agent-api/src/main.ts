@@ -9,7 +9,8 @@ async function bootstrap() {
   // 启用CORS
   app.enableCors({
     origin: [
-      'http://localhost:5179',
+      'http://localhost:5173',
+      'http://localhost:80',
     ],
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH'],
     allowedHeaders: ['Content-Type', 'Authorization'],
