@@ -4,7 +4,7 @@ services:
   # PostgreSQL数据库
   postgres:
     image: ankane/pgvector
-    container_name: postgres-dev
+    container_name: postgres
     environment:
       POSTGRES_DB: hackathon
       POSTGRES_USER: postgres
@@ -17,7 +17,7 @@ services:
   # Redis缓存
   redis:
     image: redis:7-alpine
-    container_name: redis-dev
+    container_name: redis
     ports:
       - "6379:6379"
 
@@ -27,12 +27,14 @@ services:
       context: .
       dockerfile: apps/agent-api/Dockerfile
       target: development
-    container_name: agent-api-dev
+    container_name: agent-api
     ports:
       - "3001:3001"
     environment:
       - DATABASE_URL=postgresql://postgres:postgres@postgres:5432/hackathon
       - REDIS_URL=redis://redis:6379
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - OPENAI_BASE_URL=${OPENAI_BASE_URL:-https://api.openai.com/v1}
     depends_on:
       - postgres
       - redis
@@ -55,7 +57,7 @@ services:
       context: .
       dockerfile: apps/agent-web/Dockerfile
       target: development
-    container_name: agent-web-dev
+    container_name: agent-web
     ports:
       - "5173:5173"
     environment:

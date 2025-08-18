@@ -31,6 +31,7 @@ model Toolkit {
   name          String
   description   String
   settings      Json
+  type          ToolkitType  @default(BUSINESS)
   agentToolkits AgentToolkit[]
   tools         Tool[]
   createdAt     DateTime      @default(now()) @map("created_at")
@@ -155,4 +156,9 @@ enum FileStatus {
   PROCESSING
   PROCESSED
   FAILED
+}
+
+enum ToolkitType {
+  BUSINESS
+  SYSTEM
 }

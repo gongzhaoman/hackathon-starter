@@ -1,4 +1,4 @@
-import { PrismaService } from '../../prisma/prisma.service';
+import { PrismaService } from '../../prisma/prisma.service';  // 导入 PrismaService
 
 import { toolkitId } from '../toolkits.decorator';
 import { BaseToolkit } from './base-toolkit';
@@ -52,22 +52,28 @@ export class ToolExplorerToolkit extends BaseToolkit {
   async listAllTools(): Promise<
     { name: string; description: string }[] | string
   > {
-    // 排除 tool-explorer-toolkit 中的元工具，只返回业务工具
+    // 只返回业务工具包中的工具
     const tools = await this.prismaService.tool.findMany({
       where: {
         toolkit: {
-          id: {
-            not: 'tool-explorer-toolkit-01'
+          type: 'BUSINESS'
+        }
+      },
+      include: {
+        toolkit: {
+          select: {
+            name: true
           }
         }
       }
     });
     if (tools.length === 0) {
-      return 'No tools found';
+      return 'No business tools found';
     }
     return tools.map((tool) => ({
       name: tool.name,
       description: tool.description,
+      toolkit: tool.toolkit.name,
     }));
   }
 
@@ -82,10 +88,13 @@ export class ToolExplorerToolkit extends BaseToolkit {
     const tool = await this.prismaService.tool.findUnique({
       where: {
         name: toolName,
+        toolkit: {
+          type: 'BUSINESS'
+        }
       },
     });
     if (!tool) {
-      return `Tool ${toolName} not found`;
+      return `Business tool ${toolName} not found`;
     }
     return {
       name: tool.name,

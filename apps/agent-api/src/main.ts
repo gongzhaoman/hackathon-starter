@@ -27,7 +27,7 @@ async function bootstrap() {
   // 设置全局前缀
   app.setGlobalPrefix('api');
 
-  const port = process.env.PORT || 3001;
+  const port = process.env.PORT || 3000;
 
   await app.listen(port);
   console.log(`API Agent is running on: http://localhost:${port}`);

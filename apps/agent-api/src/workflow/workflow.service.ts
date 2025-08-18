@@ -131,6 +131,55 @@ ${JSON.stringify(agent.output, null, 2)}
         tools = [...tools, ...kbToolNames];
       }
 
+      // 处理工具包分配（如果 DSL 中定义了 toolkits）
+      if (agent.toolkits && agent.toolkits.length > 0) {
+        // 清理现有的工具包关联（除了知识库工具包）
+        await this.prismaService.agentToolkit.deleteMany({
+          where: { 
+            agentId: persistentAgent.id,
+            toolkitId: { not: 'knowledge-base-toolkit-01' }
+          },
+        });
+
+        // 只分配业务工具包
+        for (const toolkitId of agent.toolkits) {
+          // 验证是否为业务工具包
+          const toolkit = await this.prismaService.toolkit.findUnique({
+            where: { id: toolkitId },
+          });
+
+          if (!toolkit) {
+            this.logger.warn(`Toolkit ${toolkitId} not found`);
+            continue;
+          }
+
+          if (toolkit.type === 'system') {
+            this.logger.warn(`Skipping system toolkit ${toolkitId} for execution agent ${persistentAgent.id}`);
+            continue;
+          }
+
+          // 检查是否已存在（避免重复分配）
+          const existing = await this.prismaService.agentToolkit.findFirst({
+            where: {
+              agentId: persistentAgent.id,
+              toolkitId: toolkitId,
+            },
+          });
+
+          if (!existing) {
+            await this.prismaService.agentToolkit.create({
+              data: {
+                agentId: persistentAgent.id,
+                toolkitId: toolkitId,
+                settings: { agentId: persistentAgent.id },
+              },
+            });
+
+            this.logger.log(`Assigned business toolkit ${toolkitId} to agent ${persistentAgent.id}`);
+          }
+        }
+      }
+
       agentsRegistry.set(
         agent.name,
         await this.agentService.createAgentInstance(prompt, tools),

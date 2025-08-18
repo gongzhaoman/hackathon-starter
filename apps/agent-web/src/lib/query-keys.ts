@@ -5,7 +5,7 @@
 
 export const queryKeys = {
   // 所有查询的根键
-  all: ['agent-platform'] as const,
+  all: ['app'] as const,
 
   // 智能体相关查询
   agents: (params?: Record<string, unknown>) => [...queryKeys.all, 'agents', params || {}] as const,
