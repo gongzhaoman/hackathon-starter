@@ -102,7 +102,7 @@ export const useDeleteKnowledgeBase = () => {
       // 返回上下文，以便在错误时回滚
       return { previousKnowledgeBases };
     },
-    onError: (error, __, context) => {
+    onError: (_, __, context) => {
       // 如果删除失败，回滚到之前的状态
       if (context?.previousKnowledgeBases) {
         queryClient.setQueryData(queryKeys.knowledgeBases(), context.previousKnowledgeBases);
