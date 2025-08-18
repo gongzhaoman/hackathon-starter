@@ -6,7 +6,7 @@ import type { CreateAgentDto, ChatWithAgentDto } from '../types';
 // Query Options - 分离查询选项和 hooks
 export const agentQueryOptions = {
   // 获取所有智能体
-  list: (filters = {}) => ({
+  list: (filters?: Record<string, unknown>) => ({
     queryKey: queryKeys.agents(filters),
     queryFn: () => apiClient.getAgents(),
     staleTime: 2 * 60 * 1000, // 2分钟
@@ -51,7 +51,7 @@ export const useCreateAgent = () => {
     mutationFn: (data: CreateAgentDto) => apiClient.createAgent(data),
     onSuccess: (newAgent) => {
       // 乐观更新：立即将新智能体添加到列表中
-      queryClient.setQueryData(queryKeys.agents({}), (old: any) => {
+      queryClient.setQueryData(queryKeys.agents(), (old: any) => {
         if (!old) return [newAgent];
         return [newAgent, ...old];
       });
@@ -61,7 +61,7 @@ export const useCreateAgent = () => {
     },
     onSettled: () => {
       // 重新获取列表以确保数据一致性
-      queryClient.invalidateQueries({ queryKey: queryKeys.agents({}) });
+      queryClient.invalidateQueries({ queryKey: queryKeys.agents() });
     },
   });
 };
@@ -76,7 +76,7 @@ export const useUpdateAgent = () => {
       // 更新智能体详情缓存
       queryClient.setQueryData(queryKeys.agent(updatedAgent.id), updatedAgent);
       // 使智能体列表缓存失效
-      queryClient.invalidateQueries({ queryKey: queryKeys.agents({}) });
+      queryClient.invalidateQueries({ queryKey: queryKeys.agents() });
     },
   });
 };
@@ -93,14 +93,14 @@ export const useDeleteAgent = () => {
       console.log('开始乐观更新，删除智能体:', deletedId);
 
       // 取消正在进行的查询，避免覆盖我们的乐观更新
-      await queryClient.cancelQueries({ queryKey: queryKeys.agents({}) });
+      await queryClient.cancelQueries({ queryKey: queryKeys.agents() });
 
       // 获取当前的智能体列表
-      const previousAgents = queryClient.getQueryData(queryKeys.agents({}));
+      const previousAgents = queryClient.getQueryData(queryKeys.agents());
       console.log('当前智能体列表:', previousAgents);
 
       // 乐观更新：立即从列表中移除被删除的智能体
-      queryClient.setQueryData(queryKeys.agents({}), (old: any) => {
+      queryClient.setQueryData(queryKeys.agents(), (old: any) => {
         if (!old) return old;
         const newList = old.filter((agent: any) => agent.id !== deletedId);
         console.log('更新后的智能体列表:', newList);
@@ -114,7 +114,7 @@ export const useDeleteAgent = () => {
       console.error('删除智能体失败，回滚状态:', error);
       // 如果删除失败，回滚到之前的状态
       if (context?.previousAgents) {
-        queryClient.setQueryData(queryKeys.agents({}), context.previousAgents);
+        queryClient.setQueryData(queryKeys.agents(), context.previousAgents);
       }
     },
     onSuccess: (_, deletedId) => {
@@ -129,7 +129,7 @@ export const useDeleteAgent = () => {
     onSettled: () => {
       console.log('删除操作完成，重新获取数据');
       // 无论成功还是失败，都重新获取智能体列表以确保数据一致性
-      queryClient.invalidateQueries({ queryKey: queryKeys.agents({}) });
+      queryClient.invalidateQueries({ queryKey: queryKeys.agents() });
     },
   });
 };

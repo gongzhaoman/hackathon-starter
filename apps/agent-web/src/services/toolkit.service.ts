@@ -5,7 +5,7 @@ import { queryKeys } from '../lib/query-keys';
 // Query Options
 export const toolkitQueryOptions = {
   // 获取所有工具包
-  list: (filters = {}) => ({
+  list: (filters?: Record<string, unknown>) => ({
     queryKey: queryKeys.toolkits(filters),
     queryFn: () => apiClient.getToolkits(),
     staleTime: 10 * 60 * 1000, // 工具包变化较少，缓存10分钟

@@ -6,7 +6,7 @@ import type { CreateKnowledgeBaseDto, UpdateKnowledgeBaseDto, ChatWithKnowledgeB
 // Query Options - 分离查询选项和 hooks
 export const knowledgeBaseQueryOptions = {
   // 获取所有知识库
-  list: (filters = {}) => ({
+  list: (filters?: Record<string, unknown>) => ({
     queryKey: queryKeys.knowledgeBases(filters),
     queryFn: () => apiClient.getKnowledgeBases(),
     staleTime: 2 * 60 * 1000, // 2分钟
@@ -51,7 +51,7 @@ export const useCreateKnowledgeBase = () => {
     mutationFn: (data: CreateKnowledgeBaseDto) => apiClient.createKnowledgeBase(data),
     onSuccess: (newKnowledgeBase) => {
       // 乐观更新：立即将新知识库添加到列表中
-      queryClient.setQueryData(queryKeys.knowledgeBases({}), (old: any) => {
+      queryClient.setQueryData(queryKeys.knowledgeBases(), (old: any) => {
         if (!old) return [newKnowledgeBase];
         return [newKnowledgeBase, ...old];
       });
@@ -61,7 +61,7 @@ export const useCreateKnowledgeBase = () => {
     },
     onSettled: () => {
       // 重新获取列表以确保数据一致性
-      queryClient.invalidateQueries({ queryKey: queryKeys.knowledgeBases({}) });
+      queryClient.invalidateQueries({ queryKey: queryKeys.knowledgeBases() });
     },
   });
 };
@@ -76,7 +76,7 @@ export const useUpdateKnowledgeBase = () => {
       // 更新知识库详情缓存
       queryClient.setQueryData(queryKeys.knowledgeBase(updatedKnowledgeBase.id), updatedKnowledgeBase);
       // 使知识库列表缓存失效
-      queryClient.invalidateQueries({ queryKey: queryKeys.knowledgeBases({}) });
+      queryClient.invalidateQueries({ queryKey: queryKeys.knowledgeBases() });
     },
   });
 };
@@ -88,13 +88,13 @@ export const useDeleteKnowledgeBase = () => {
     mutationFn: (id: string) => apiClient.deleteKnowledgeBase(id),
     onMutate: async (deletedId) => {
       // 取消正在进行的查询，避免覆盖我们的乐观更新
-      await queryClient.cancelQueries({ queryKey: queryKeys.knowledgeBases({}) });
+      await queryClient.cancelQueries({ queryKey: queryKeys.knowledgeBases() });
 
       // 获取当前的知识库列表
-      const previousKnowledgeBases = queryClient.getQueryData(queryKeys.knowledgeBases({}));
+      const previousKnowledgeBases = queryClient.getQueryData(queryKeys.knowledgeBases());
 
       // 乐观更新：立即从列表中移除被删除的知识库
-      queryClient.setQueryData(queryKeys.knowledgeBases({}), (old: any) => {
+      queryClient.setQueryData(queryKeys.knowledgeBases(), (old: any) => {
         if (!old) return old;
         return old.filter((kb: any) => kb.id !== deletedId);
       });
@@ -105,7 +105,7 @@ export const useDeleteKnowledgeBase = () => {
     onError: (error, __, context) => {
       // 如果删除失败，回滚到之前的状态
       if (context?.previousKnowledgeBases) {
-        queryClient.setQueryData(queryKeys.knowledgeBases({}), context.previousKnowledgeBases);
+        queryClient.setQueryData(queryKeys.knowledgeBases(), context.previousKnowledgeBases);
       }
     },
     onSuccess: (_, deletedId) => {
@@ -118,7 +118,7 @@ export const useDeleteKnowledgeBase = () => {
     },
     onSettled: () => {
       // 无论成功还是失败，都重新获取知识库列表以确保数据一致性
-      queryClient.invalidateQueries({ queryKey: queryKeys.knowledgeBases({}) });
+      queryClient.invalidateQueries({ queryKey: queryKeys.knowledgeBases() });
     },
   });
 };
