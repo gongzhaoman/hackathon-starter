@@ -1,4 +1,4 @@
-import { LlamaindexService } from 'src/llamaindex/llamaindex.service';
+import { LlamaindexService } from '../../llamaindex/llamaindex.service';
 import { Settings } from '../interface/settings';
 import { Toolkit, ToolsType } from '../interface/toolkit';
 import { TOOLKIT_ID_KEY } from '../toolkits.decorator';

@@ -13,8 +13,14 @@
     "test": "jest",
     "test:watch": "jest --watch",
     "test:cov": "jest --coverage",
+    "test:cov:watch": "jest --coverage --watch",
     "test:debug": "node --inspect-brk -r tsconfig-paths/register -r ts-node/register node_modules/.bin/jest --runInBand",
     "test:e2e": "jest --config ./test/jest-e2e.json",
+    "test:e2e:watch": "jest --config ./test/jest-e2e.json --watch",
+    "test:unit": "jest --testPathIgnorePatterns=.*\\.e2e-spec\\.ts$",
+    "test:unit:watch": "jest --testPathIgnorePatterns=.*\\.e2e-spec\\.ts$ --watch",
+    "test:all": "npm run test:unit && npm run test:e2e",
+    "test:ci": "jest --coverage --ci --watchAll=false",
     "typecheck": "tsc --noEmit",
     "db:generate": "prisma generate --schema=./prisma/schema.prisma",
     "db:migrate": "prisma migrate dev --schema=./prisma/schema.prisma",
@@ -47,6 +53,7 @@
     "@nestjs/testing": "^10.0.0",
     "@types/express": "^4.17.17",
     "@types/jest": "^29.5.2",
+    "@types/multer": "^2.0.0",
     "@types/node": "^20.17.19",
     "@types/supertest": "^6.0.0",
     "@workspace/eslint-config": "workspace:*",
@@ -74,9 +81,33 @@
       "^.+\\.(t|j)s$": "ts-jest"
     },
     "collectCoverageFrom": [
-      "**/*.(t|j)s"
+      "**/*.(t|j)s",
+      "!**/*.spec.ts",
+      "!**/*.e2e-spec.ts",
+      "!**/node_modules/**",
+      "!**/dist/**",
+      "!**/coverage/**",
+      "!**/*.d.ts",
+      "!**/main.ts"
     ],
     "coverageDirectory": "../coverage",
-    "testEnvironment": "node"
+    "coverageReporters": [
+      "text",
+      "lcov",
+      "html",
+      "json"
+    ],
+    "coverageThreshold": {
+      "global": {
+        "branches": 50,
+        "functions": 45,
+        "lines": 50,
+        "statements": 50
+      }
+    },
+    "testEnvironment": "node",
+    "setupFilesAfterEnv": [
+      "<rootDir>/test-setup.ts"
+    ]
   }
 }

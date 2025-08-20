@@ -1,7 +1,7 @@
 import { FunctionTool } from 'llamaindex';
 import { toolkitId } from '../toolkits.decorator';
 import { BaseToolkit } from './base-toolkit';
-import { KnowledgeBaseService } from 'src/knowledge-base/knowledge-base.service';
+import { KnowledgeBaseService } from '../../knowledge-base/knowledge-base.service';
 import { Logger } from '@nestjs/common';
 
 @toolkitId('knowledge-base-toolkit-01')
