@@ -7,7 +7,15 @@ import dslSchema from './DSL_schema/dsl_schema_v1.json';
 export class CreateWorkflowDslDto {
   @IsString()
   @IsNotEmpty()
-  userMessage!: string;
+  description!: string;
+
+  @IsObject()
+  @IsOptional()
+  inputSchema?: Record<string, string>;
+
+  @IsObject()
+  @IsOptional()
+  outputSchema?: Record<string, string>;
 }
 
 export class CreateWorkflowDto {
@@ -60,13 +68,15 @@ export class WorkflowController {
 
   @Post('generate-dsl')
   async generateDsl(@Body() body: CreateWorkflowDslDto) {
-    const workflow = await this.workflowService.getCreateDSLWorkflow(
+    const workflow = await this.workflowService.createDslGeneratorWorkflow(
       dslSchema,
-      body.userMessage,
+      body.description,
+      body.inputSchema,
+      body.outputSchema,
     );
 
     const result = await workflow.execute({
-      userMessage: body.userMessage,
+      description: body.description,
     });
 
     return { dsl: result };

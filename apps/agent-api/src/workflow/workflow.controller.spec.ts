@@ -23,7 +23,7 @@ describe('WorkflowController', () => {
 
   beforeEach(async () => {
     const mockWorkflowService = {
-      getCreateDSLWorkflow: jest.fn(),
+      createDslGeneratorWorkflow: jest.fn(),
       createWorkflow: jest.fn(),
       getAllWorkflows: jest.fn(),
       getWorkflow: jest.fn(),
@@ -54,7 +54,9 @@ describe('WorkflowController', () => {
 
   describe('generateDsl', () => {
     const generateDslDto: CreateWorkflowDslDto = {
-      userMessage: 'Create a workflow that processes user data'
+      description: 'Create a workflow that processes user data',
+      inputSchema: { data: 'string' },
+      outputSchema: { result: 'string' }
     };
 
     it('should generate DSL from user message', async () => {
@@ -62,22 +64,24 @@ describe('WorkflowController', () => {
         execute: jest.fn().mockResolvedValue(mockWorkflow.DSL)
       };
 
-      workflowService.getCreateDSLWorkflow.mockResolvedValue(mockDslWorkflow);
+      workflowService.createDslGeneratorWorkflow.mockResolvedValue(mockDslWorkflow);
 
       const result = await controller.generateDsl(generateDslDto);
 
-      expect(workflowService.getCreateDSLWorkflow).toHaveBeenCalledWith(
+      expect(workflowService.createDslGeneratorWorkflow).toHaveBeenCalledWith(
         expect.any(Object), // dslSchema
-        generateDslDto.userMessage
+        generateDslDto.description,
+        generateDslDto.inputSchema,
+        generateDslDto.outputSchema
       );
       expect(mockDslWorkflow.execute).toHaveBeenCalledWith({
-        userMessage: generateDslDto.userMessage
+        description: generateDslDto.description
       });
       expect(result).toEqual({ dsl: mockWorkflow.DSL });
     });
 
     it('should handle DSL generation errors', async () => {
-      workflowService.getCreateDSLWorkflow.mockRejectedValue(new Error('DSL generation failed'));
+      workflowService.createDslGeneratorWorkflow.mockRejectedValue(new Error('DSL generation failed'));
 
       await expect(controller.generateDsl(generateDslDto)).rejects.toThrow('DSL generation failed');
     });
@@ -316,20 +320,22 @@ describe('WorkflowController', () => {
   describe('input validation', () => {
     it('should accept valid CreateWorkflowDslDto', async () => {
       const validDto: CreateWorkflowDslDto = {
-        userMessage: 'Create a complex data processing workflow'
+        description: 'Create a complex data processing workflow'
       };
 
       const mockDslWorkflow = {
         execute: jest.fn().mockResolvedValue(mockWorkflow.DSL)
       };
 
-      workflowService.getCreateDSLWorkflow.mockResolvedValue(mockDslWorkflow);
+      workflowService.createDslGeneratorWorkflow.mockResolvedValue(mockDslWorkflow);
 
       const result = await controller.generateDsl(validDto);
 
-      expect(workflowService.getCreateDSLWorkflow).toHaveBeenCalledWith(
+      expect(workflowService.createDslGeneratorWorkflow).toHaveBeenCalledWith(
         expect.any(Object),
-        validDto.userMessage
+        validDto.description,
+        undefined,
+        undefined
       );
       expect(result).toBeDefined();
     });

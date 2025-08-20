@@ -413,7 +413,7 @@ describe('WorkflowService', () => {
         })
       });
 
-      const workflow = await service.getCreateDSLWorkflow(dslSchema, userMessage);
+      const workflow = await service.createDslGeneratorWorkflow(dslSchema, userMessage);
 
       expect(workflow).toBeDefined();
       expect(prismaService.tool.findMany).toHaveBeenCalledWith({

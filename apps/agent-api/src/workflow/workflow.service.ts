@@ -223,9 +223,11 @@ ${JSON.stringify(agent.output, null, 2)}
     return workflow;
   }
 
-  async getCreateDSLWorkflow(
+  async createDslGeneratorWorkflow(
     dslSchema: any,
-    userMessage: string,
+    description: string,
+    inputSchema?: Record<string, string>,
+    outputSchema?: Record<string, string>,
   ): Promise<any> {
     const workflow = new Workflow<any, any, any>(this.eventBus, {});
 
@@ -235,9 +237,48 @@ ${JSON.stringify(agent.output, null, 2)}
       },
     });
 
+    // 构建输入输出schema约束
+    let schemaConstraints = '';
+    if (inputSchema || outputSchema) {
+      schemaConstraints = `
+
+## 重要：数据结构约束
+
+**此工作流必须严格按照以下数据结构设计：**
+`;
+      
+      if (inputSchema) {
+        schemaConstraints += `
+### 输入数据结构（必须严格遵守）
+工作流的WORKFLOW_START事件的data字段必须完全符合以下结构：
+${JSON.stringify(inputSchema, null, 2)}
+`;
+      }
+      
+      if (outputSchema) {
+        schemaConstraints += `
+### 输出数据结构（必须严格遵守）
+工作流的WORKFLOW_STOP事件的data字段必须完全符合以下结构：
+${JSON.stringify(outputSchema, null, 2)}
+`;
+      }
+      
+      schemaConstraints += `
+**关键约束：**
+- 生成的DSL中的events数组必须包含与指定schema完全匹配的数据结构
+- WORKFLOW_START事件的data字段必须与输入schema一致
+- WORKFLOW_STOP事件的data字段必须与输出schema一致
+- 不得添加、删除或修改schema中定义的字段名和类型
+- 所有步骤的处理逻辑必须确保数据在输入输出之间正确转换
+`;
+    }
+
     const prompt = `你是一个专业的DSL(领域专用语言)工作流设计专家，专门负责将用户的自然语言需求转换为标准化的AI工作流编排DSL。
 
+**当前任务：** 根据描述"${description}"设计工作流DSL。${schemaConstraints}
+
 **重要：你必须只输出纯JSON格式的DSL，不要包含任何解释文字、markdown代码块标记或其他内容。直接输出符合DSL Schema规范的JSON对象。**
+
 DSL Schema如下:
 ${JSON.stringify(dslSchema, null, 2)}
 
@@ -470,7 +511,7 @@ const classification = JSON.parse(resultString); // 如果需要结构化数据�
     workflow.addStep({
       eventType: StartEvent.type,
       handle: async (event, context) => {
-        const reply = await agent.run(event.data.userMessage);
+        const reply = await agent.run(event.data.description);
 
         try {
           // 尝试不同的数据路径
@@ -488,6 +529,11 @@ const classification = JSON.parse(resultString); // 如果需要结构化数据�
 
           // 验证DSL
           this.validateDsl(dsl);
+          
+          // 如果有输入输出schema约束，额外验证数据结构
+          if (inputSchema || outputSchema) {
+            this.validateSchemaCompliance(dsl, inputSchema, outputSchema);
+          }
 
           return new StopEvent({
             data: dsl,
@@ -676,5 +722,38 @@ const classification = JSON.parse(resultString); // 如果需要结构化数据�
     }
 
     return true;
+  }
+
+  private validateSchemaCompliance(
+    dsl: any,
+    inputSchema?: Record<string, string>,
+    outputSchema?: Record<string, string>,
+  ) {
+    const startEvent = dsl.events.find((e: any) => e.type === 'WORKFLOW_START');
+    const stopEvent = dsl.events.find((e: any) => e.type === 'WORKFLOW_STOP');
+
+    if (inputSchema && startEvent) {
+      const startData = startEvent.data || {};
+      for (const [key, type] of Object.entries(inputSchema)) {
+        if (!startData.hasOwnProperty(key)) {
+          throw new Error(`WORKFLOW_START event missing required field: ${key}`);
+        }
+        if (startData[key] !== type) {
+          throw new Error(`WORKFLOW_START event field ${key} type mismatch: expected ${type}, got ${startData[key]}`);
+        }
+      }
+    }
+
+    if (outputSchema && stopEvent) {
+      const stopData = stopEvent.data || {};
+      for (const [key, type] of Object.entries(outputSchema)) {
+        if (!stopData.hasOwnProperty(key)) {
+          throw new Error(`WORKFLOW_STOP event missing required field: ${key}`);
+        }
+        if (stopData[key] !== type) {
+          throw new Error(`WORKFLOW_STOP event field ${key} type mismatch: expected ${type}, got ${stopData[key]}`);
+        }
+      }
+    }
   }
 }
