@@ -368,11 +368,11 @@ describe('KnowledgeBaseController', () => {
         ]
       };
 
-      (knowledgeBaseService.chat as jest.Mock).mockResolvedValue(mockChatResponse);
+      (knowledgeBaseService.query as jest.Mock).mockResolvedValue(mockChatResponse);
 
-      const result = await controller.chat('kb-1', chatDto);
+      const result = await controller.query('kb-1', { query: chatDto.message });
 
-      expect(knowledgeBaseService.chat).toHaveBeenCalledWith('kb-1', chatDto.message);
+      expect(knowledgeBaseService.query).toHaveBeenCalledWith('kb-1', chatDto.message, undefined);
       expect(result).toEqual(mockChatResponse);
     });
 
@@ -381,11 +381,11 @@ describe('KnowledgeBaseController', () => {
         message: 'What is this document about?',
       };
 
-      (knowledgeBaseService.chat as jest.Mock).mockRejectedValue(
+      (knowledgeBaseService.query as jest.Mock).mockRejectedValue(
         new NotFoundException('Knowledge base not found')
       );
 
-      await expect(controller.chat('non-existent', chatDto)).rejects.toThrow(
+      await expect(controller.query('non-existent', { query: chatDto.message })).rejects.toThrow(
         new NotFoundException('Knowledge base not found')
       );
     });

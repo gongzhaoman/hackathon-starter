@@ -3,7 +3,7 @@ import { DiscoveryService, ModuleRef, Reflector } from '@nestjs/core';
 
 import { PrismaService } from '../prisma/prisma.service';
 import { Toolkit } from './interface/toolkit';
-import { TOOLKIT_ID_KEY } from './toolkits.decorator';
+import { TOOLKIT_ID_KEY, TOOLKIT_TYPE_KEY } from './toolkits.decorator';
 
 @Injectable()
 export class ToolkitsService implements OnModuleInit {
@@ -59,12 +59,17 @@ export class ToolkitsService implements OnModuleInit {
         );
       }
 
+      // Get toolkit type from metadata
+      const ToolkitClass = this.toolkitMap.get(toolkit.id);
+      const toolkitType = this.reflector.get(TOOLKIT_TYPE_KEY, ToolkitClass) || 'BUSINESS';
+
       await this.prismaService.toolkit.upsert({
         where: { id: toolkit.id },
         update: {
           name: toolkit.name,
           description: toolkit.description,
           settings: toolkit.settings || undefined,
+          type: toolkitType,
           deleted: false,
           updatedAt: new Date(),
         },
@@ -73,6 +78,7 @@ export class ToolkitsService implements OnModuleInit {
           name: toolkit.name,
           description: toolkit.description,
           settings: toolkit.settings || undefined,
+          type: toolkitType,
         },
       });
 
@@ -147,7 +153,10 @@ export class ToolkitsService implements OnModuleInit {
 
   async getAllToolkits() {
     return this.prismaService.toolkit.findMany({
-      where: { deleted: false },
+      where: { 
+        deleted: false,
+        type: 'BUSINESS'
+      },
       include: {
         tools: {
           select: {

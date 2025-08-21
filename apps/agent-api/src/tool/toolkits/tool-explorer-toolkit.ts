@@ -4,7 +4,7 @@ import { toolkitId } from '../toolkits.decorator';
 import { BaseToolkit } from './base-toolkit';
 import { ToolsType } from '../interface/toolkit';
 
-@toolkitId('tool-explorer-toolkit-01')
+@toolkitId('tool-explorer-toolkit-01', 'SYSTEM')
 export class ToolExplorerToolkit extends BaseToolkit {
   name = '工具查询工具箱';
   description = '用于查询系统内所有已注册工具的名称、描述和参数定义。';

@@ -153,7 +153,7 @@ ${JSON.stringify(agent.output, null, 2)}
             continue;
           }
 
-          if (toolkit.type === 'system') {
+          if (toolkit.type === 'SYSTEM') {
             this.logger.warn(`Skipping system toolkit ${toolkitId} for execution agent ${persistentAgent.id}`);
             continue;
           }

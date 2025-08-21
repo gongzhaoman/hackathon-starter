@@ -1,6 +1,7 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 
 import { ToolsService } from '../tool/tools.service';
+import { KnowledgeBaseService } from '../knowledge-base/knowledge-base.service';
 
 import { CreateAgentDto, UpdateAgentDto, ChatWithAgentDto } from './agent.type';
 import { LlamaindexService } from '../llamaindex/llamaindex.service';
@@ -12,6 +13,7 @@ export class AgentService {
     private readonly prisma: PrismaService,
     private readonly llamaIndexService: LlamaindexService,
     private readonly toolsService: ToolsService,
+    private readonly knowledgeBaseService: KnowledgeBaseService,
   ) {}
 
   async findAll() {
@@ -224,10 +226,13 @@ export class AgentService {
     // 获取智能体的工具
     const tools = await this.toolsService.getAgentTools(agentId);
 
+    // 生成增强的系统提示词（包含知识库信息）
+    const enhancedPrompt = await this.generateEnhancedPrompt(agentId, agent.prompt);
+    
     // 创建智能体实例
     const agentInstance = await this.llamaIndexService.createAgent(
       tools,
-      agent.prompt,
+      enhancedPrompt,
     );
 
     // 执行对话
@@ -256,6 +261,71 @@ export class AgentService {
         },
       },
     });
+  }
+
+  // 生成智能体的知识库摘要信息，用于注入系统提示词
+  private async generateKnowledgeBaseSummary(agentId: string): Promise<string> {
+    try {
+      const knowledgeBases = await this.knowledgeBaseService.getAgentKnowledgeBasesForAI(agentId);
+      
+      if (knowledgeBases.length === 0) {
+        return '';
+      }
+
+      let summary = '\n\n## 📚 可用知识库信息\n\n';
+      summary += `你可以访问以下 ${knowledgeBases.length} 个知识库，使用 queryKnowledgeBase 工具进行查询：\n\n`;
+
+      knowledgeBases.forEach((kb: any, index: number) => {
+        summary += `### ${index + 1}. ${kb.name}\n`;
+        summary += `- **ID**: ${kb.id}\n`;
+        summary += `- **描述**: ${kb.description || '暂无描述'}\n`;
+        
+        // 添加元数据schema信息
+        const schemaFields = Object.keys(kb.metadataSchema || {});
+        if (schemaFields.length > 0) {
+          summary += `- **可过滤字段**: ${schemaFields.join(', ')}\n`;
+          
+          // 添加具体的元数据字段说明
+          summary += `- **元数据字段详情**:\n`;
+          schemaFields.forEach(field => {
+            const fieldDef = kb.metadataSchema[field];
+            summary += `  - \`${field}\` (${fieldDef.type}): ${fieldDef.description}\n`;
+          });
+
+          // 添加过滤示例
+          if (kb.filterExamples && kb.filterExamples.length > 0) {
+            summary += `- **过滤示例**:\n`;
+            kb.filterExamples.slice(0, 2).forEach((example: any) => {
+              summary += `  - ${example.description}: \`${JSON.stringify(example.filter)}\`\n`;
+            });
+          }
+        } else {
+          summary += `- **元数据**: 无特定元数据字段\n`;
+        }
+        summary += '\n';
+      });
+
+      summary += '💡 **使用建议**:\n';
+      summary += '- 直接使用知识库ID调用 queryKnowledgeBase 工具\n';
+      summary += '- 根据用户需求选择合适的元数据过滤条件\n';
+      summary += '- 结合多个知识库的信息提供综合回答\n';
+
+      return summary;
+    } catch (error) {
+      console.warn('Failed to generate knowledge base summary:', error);
+      return '';
+    }
+  }
+
+  // 生成增强的系统提示词，包含知识库信息
+  private async generateEnhancedPrompt(agentId: string, originalPrompt: string): Promise<string> {
+    const knowledgeBaseSummary = await this.generateKnowledgeBaseSummary(agentId);
+    
+    if (!knowledgeBaseSummary) {
+      return originalPrompt;
+    }
+
+    return `${originalPrompt}${knowledgeBaseSummary}`;
   }
 
 }

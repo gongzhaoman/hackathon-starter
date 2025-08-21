@@ -7,23 +7,41 @@ import {
 import { PrismaService } from '../prisma/prisma.service';
 import {
   VectorStoreIndex,
-  LlamaParseReader,
   MarkdownNodeParser,
+  Document,
+  VectorIndexRetriever,
 } from 'llamaindex';
+import type { MetadataFilter, MetadataFilters } from 'llamaindex';
+import { PGVectorStore } from '@llamaindex/postgres';
 import * as fs from 'fs/promises';
 import * as path from 'path';
 import { randomUUID } from 'crypto';
 import { FileStatus } from '@prisma/client';
-import { FileResponseDto, UpdateKnowledgeBaseDto } from './knowledge-base.type';
+import {
+  FileResponseDto,
+  UpdateKnowledgeBaseDto,
+  TypedMetadataSchema,
+  MetadataFilterRequest,
+  generateFilterExamples,
+  validateFilterCondition
+} from './knowledge-base.type';
+import * as mammoth from 'mammoth';
 
 @Injectable()
 export class KnowledgeBaseService {
   private uploadDir: string;
   private logger = new Logger(KnowledgeBaseService.name);
+  private dbConfig: any;
+  private readonly supportedFileTypes = ['.docx', '.md', '.markdown', '.txt'];
 
   constructor(private prisma: PrismaService) {
     this.uploadDir = path.join(process.cwd(), 'uploads');
     this.ensureUploadDirectory();
+
+    // PostgreSQL configuration for vector store
+    this.dbConfig = {
+      connectionString: process.env.DATABASE_URL,
+    };
   }
 
   private async ensureUploadDirectory(directoryPath?: string) {
@@ -34,20 +52,136 @@ export class KnowledgeBaseService {
     }
   }
 
+  private validateFileType(filename: string): boolean {
+    const ext = path.extname(filename).toLowerCase();
+    return this.supportedFileTypes.includes(ext);
+  }
+
+  private getFileTypeFromExtension(filename: string): 'docx' | 'markdown' | 'txt' {
+    const ext = path.extname(filename).toLowerCase();
+    if (ext === '.docx') return 'docx';
+    if (ext === '.md' || ext === '.markdown') return 'markdown';
+    return 'txt';
+  }
+
+  private async parseDocumentByType(filePath: string, fileId: string, filename: string, knowledgeBaseMetadata?: Record<string, any>): Promise<Document[]> {
+    const fileType = this.getFileTypeFromExtension(filename);
+
+    try {
+      switch (fileType) {
+        case 'docx':
+          return await this.parseDocxFile(filePath, fileId, filename, knowledgeBaseMetadata);
+        case 'markdown':
+          return await this.parseMarkdownFile(filePath, fileId, filename, knowledgeBaseMetadata);
+        case 'txt':
+          return await this.parseTextFile(filePath, fileId, filename, knowledgeBaseMetadata);
+        default:
+          throw new Error(`Unsupported file type: ${fileType}`);
+      }
+    } catch (error) {
+      this.logger.error(`Failed to parse ${fileType} file ${filename}:`, error);
+      throw error;
+    }
+  }
+
+  private async parseDocxFile(filePath: string, fileId: string, filename: string, knowledgeBaseMetadata?: Record<string, any>): Promise<Document[]> {
+    const buffer = await fs.readFile(filePath);
+
+    // 使用 convertToMarkdown 保留标题结构，以便更好地进行分块
+    // @ts-ignore - mammoth.convertToMarkdown exists but not in type definitions
+    const result = await mammoth.convertToMarkdown({ buffer });
+
+    if (!result.value.trim()) {
+      throw new Error('No text content found in DOCX file');
+    }
+
+    // 记录转换过程中的消息（如果有的话）
+    if (result.messages && result.messages.length > 0) {
+      this.logger.log(`DOCX conversion messages for ${filename}:`, result.messages);
+    }
+
+    this.logger.log(`Converted DOCX to Markdown for ${filename}. Content preview:`,
+      result.value.substring(0, 200) + '...');
+
+    return [new Document({
+      text: result.value, // 现在是 Markdown 格式，保留了标题结构
+      id_: fileId,
+      metadata: {
+        filename,
+        fileType: 'docx',
+        fileId,
+        convertedToMarkdown: true, // 标记已转换为 Markdown
+        ...knowledgeBaseMetadata, // 添加知识库元数据
+      },
+    })];
+  }
+
+  private async parseMarkdownFile(filePath: string, fileId: string, filename: string, knowledgeBaseMetadata?: Record<string, any>): Promise<Document[]> {
+    const content = await fs.readFile(filePath, 'utf-8');
+
+    if (!content.trim()) {
+      throw new Error('No content found in markdown file');
+    }
+
+    return [new Document({
+      text: content,
+      id_: fileId,
+      metadata: {
+        filename,
+        fileType: 'markdown',
+        fileId,
+        ...knowledgeBaseMetadata, // 添加知识库元数据
+      },
+    })];
+  }
+
+  private async parseTextFile(filePath: string, fileId: string, filename: string, knowledgeBaseMetadata?: Record<string, any>): Promise<Document[]> {
+    const content = await fs.readFile(filePath, 'utf-8');
+
+    if (!content.trim()) {
+      throw new Error('No content found in text file');
+    }
+
+    return [new Document({
+      text: content,
+      id_: fileId,
+      metadata: {
+        filename,
+        fileType: 'txt',
+        fileId,
+        ...knowledgeBaseMetadata, // 添加知识库元数据
+      },
+    })];
+  }
+
   private async createVectorStore(
     vectorStoreName: string,
-  ): Promise<any> {
-    // 简化实现，使用内存向量存储
-    // 在生产环境中应该使用真正的 PGVectorStore
-    this.logger.warn(`Using simplified vector store for: ${vectorStoreName}`);
-    return null;
+  ): Promise<PGVectorStore> {
+    try {
+      const vectorStore = new PGVectorStore({
+        clientConfig: this.dbConfig,
+        dimensions: 1536, // OpenAI text-embedding-3-small dimensions
+        tableName: `vector_${vectorStoreName.replace(/[^a-zA-Z0-9_]/g, '_')}`, // 确保表名安全
+        schemaName: 'rag',
+      });
+
+      this.logger.log(`Created PGVectorStore for: ${vectorStoreName}`);
+      return vectorStore;
+    } catch (error) {
+      this.logger.error(`Failed to create vector store for ${vectorStoreName}:`, error);
+      throw error;
+    }
   }
 
   private async createIndex(
-    _vectorStore?: any,
+    vectorStore: PGVectorStore,
   ): Promise<VectorStoreIndex> {
-    // 使用默认的内存存储
-    return VectorStoreIndex.fromDocuments([]);
+    try {
+      return await VectorStoreIndex.fromVectorStore(vectorStore);
+    } catch (error) {
+      this.logger.error('Failed to create vector store index:', error);
+      throw error;
+    }
   }
 
   async getAllKnowledgeBases(userId?: string) {
@@ -66,6 +200,31 @@ export class KnowledgeBaseService {
       include: {
         knowledgeBase: true,
       },
+    });
+  }
+
+  // 专门给AI工具使用的方法，返回包含完整元数据信息的知识库列表
+  async getAgentKnowledgeBasesForAI(agentId: string) {
+    const agentKnowledgeBases = await this.prisma.agentKnowledgeBase.findMany({
+      where: { agentId },
+      include: {
+        knowledgeBase: true,
+      },
+    });
+
+    // 转换为AI友好的格式，包含详细的元数据schema和示例
+    return agentKnowledgeBases.map((akb: any) => {
+      const schema = (akb.knowledgeBase.metadata as TypedMetadataSchema) || {};
+      return {
+        id: akb.knowledgeBase.id,
+        name: akb.knowledgeBase.name,
+        description: akb.knowledgeBase.description || '',
+        metadataSchema: schema,
+        filterExamples: generateFilterExamples(schema),
+        availableOperators: ['==', '!=', '>', '<', '>=', '<=', 'in', 'nin', 'text_match'],
+        createdAt: akb.knowledgeBase.createdAt,
+        updatedAt: akb.knowledgeBase.updatedAt,
+      };
     });
   }
 
@@ -112,12 +271,13 @@ export class KnowledgeBaseService {
     });
   }
 
-  async createKnowledgeBase(userId: string | undefined, name: string, description: string) {
+  async createKnowledgeBase(userId: string | undefined, name: string, description: string, metadataSchema?: TypedMetadataSchema) {
     const vectorStoreName = `kb_${userId || 'default'}_${name}`;
     const knowledgeBase = await this.prisma.knowledgeBase.create({
       data: {
         name,
         description,
+        metadata: metadataSchema as any,
         vectorStoreName,
         createdById: userId,
       },
@@ -148,10 +308,16 @@ export class KnowledgeBaseService {
 
     await this.prisma.knowledgeBase.delete({ where: { id: knowledgeBaseId } });
 
-    const vectorStore = await this.createVectorStore(
-      knowledgeBase.vectorStoreName,
-    );
-    await vectorStore.clearCollection();
+    try {
+      const vectorStore = await this.createVectorStore(
+        knowledgeBase.vectorStoreName,
+      );
+      await vectorStore.clearCollection();
+      this.logger.log(`Cleared vector collection for: ${knowledgeBase.vectorStoreName}`);
+    } catch (error) {
+      this.logger.warn(`Failed to clear vector collection for ${knowledgeBase.vectorStoreName}:`, error);
+      // 不抛出错误，因为数据库记录已删除
+    }
   }
 
   async uploadFile(
@@ -162,6 +328,14 @@ export class KnowledgeBaseService {
     const knowledgeBase = await this.getKnowledgeBase(userId, knowledgeBaseId);
 
     const fileName = Buffer.from(file.originalname, 'latin1').toString('utf8');
+
+    // 验证文件类型
+    if (!this.validateFileType(fileName)) {
+      throw new ForbiddenException(
+        `Unsupported file type. Only ${this.supportedFileTypes.join(', ')} files are allowed.`
+      );
+    }
+
     const directoryPath = path.join(this.uploadDir, randomUUID());
     await this.ensureUploadDirectory(directoryPath);
     const filePath = path.join(directoryPath, fileName);
@@ -220,21 +394,21 @@ export class KnowledgeBaseService {
     }
 
     try {
-      const reader = new LlamaParseReader({
-        resultType: 'markdown',
-      });
+      // 从知识库schema中提取默认元数据值
+      const schema = (knowledgeBase as any).metadata as TypedMetadataSchema || {};
+      const defaultMetadata = this.extractDefaultMetadata(schema);
+
+      // 使用新的文档解析器，传递默认元数据
+      const documents = await this.parseDocumentByType(file.path, fileId, file.name, defaultMetadata);
+
+      // 使用 MarkdownNodeParser 来分割文档
       const markdownParser = new MarkdownNodeParser();
-
-      const documents = await reader.loadData(file.path);
-
-      documents.forEach((document: any) => {
-        document.doc_id = fileId;
-      });
-
       const nodes = markdownParser.getNodesFromDocuments(documents);
 
-      nodes.forEach((node) => {
-        this.logger.log(`训练内容：${node.text}`);
+      this.logger.log(`Parsed ${documents.length} documents into ${nodes.length} nodes for file: ${file.name}`);
+
+      nodes.forEach((node, index) => {
+        this.logger.log(`Node ${index + 1}: ${node.text.substring(0, 200)}...`);
       });
 
       const vectorStore = await this.createVectorStore(
@@ -303,37 +477,12 @@ export class KnowledgeBaseService {
             knowledgeBase.vectorStoreName,
           );
 
-          // 检查 vectorStore 是否存在且有 delete 方法
-          if (vectorStore) {
-            const index = await this.createIndex(vectorStore);
-
-            // 尝试删除向量存储中的文档
-            try {
-              await vectorStore.delete(fileId);
-            } catch (vectorError: any) {
-              this.logger.warn(
-                `Failed to delete from vector store: ${vectorError?.message || vectorError}`,
-              );
-            }
-
-            // 尝试删除索引中的引用文档
-            try {
-              if (index && typeof index.deleteRefDoc === 'function') {
-                await index.deleteRefDoc(fileId);
-              }
-            } catch (indexError: any) {
-              this.logger.warn(
-                `Failed to delete from index: ${indexError?.message || indexError}`,
-              );
-            }
-          } else {
-            this.logger.warn(
-              `Vector store for ${knowledgeBase.vectorStoreName} does not support deletion or is not properly initialized`,
-            );
-          }
+          // 尝试删除向量存储中的文档
+          await vectorStore.delete(fileId);
+          this.logger.log(`Deleted vector data for file ${fileId} from ${knowledgeBase.vectorStoreName}`);
         } catch (error: any) {
           // 记录错误但不中断流程
-          this.logger.error(
+          this.logger.warn(
             `Failed to delete vector store data for file ${fileId}: ${error?.message || error}`,
           );
         }
@@ -363,15 +512,47 @@ export class KnowledgeBaseService {
     return await this.createIndex(vectorStore);
   }
 
-  async chat(knowledgeBaseId: string, message: string) {
+  async query(knowledgeBaseId: string, query: string, metadataFilters?: MetadataFilterRequest) {
     const index = await this.getIndex(knowledgeBaseId);
-    const queryEngine = index.asQueryEngine({
-      similarityTopK: 10,
+
+    // 获取知识库的元数据schema用于验证
+    const knowledgeBase = await this.prisma.knowledgeBase.findUnique({
+      where: { id: knowledgeBaseId },
     });
 
-    const response = await queryEngine.query({ query: message });
+    if (!knowledgeBase) {
+      throw new NotFoundException('Knowledge base not found');
+    }
 
-    const filteredSources = response.sourceNodes
+    const schema = (knowledgeBase as any).metadata as TypedMetadataSchema || {};
+
+    // 构建元数据过滤器
+    let filters: MetadataFilters | undefined;
+    if (metadataFilters && metadataFilters.filters && metadataFilters.filters.length > 0) {
+      // 验证过滤条件
+      for (const condition of metadataFilters.filters) {
+        const validation = validateFilterCondition(condition, schema);
+        if (!validation.valid) {
+          this.logger.warn(`过滤条件验证失败: ${validation.error}`);
+          // 可以选择抛出错误或忽略无效条件
+          // throw new BadRequestException(validation.error);
+        }
+      }
+
+      filters = this.buildMetadataFilters(metadataFilters);
+    }
+
+    // 直接使用VectorIndexRetriever的filter参数
+    const retriever = new VectorIndexRetriever({
+      index,
+      similarityTopK: 20, // 先获取20个结果用于筛选
+      filters, // 直接传递过滤器
+    });
+
+    const nodes = await retriever.retrieve({ query });
+
+    // 处理结果
+    const sources = nodes
       .map((node: any) => ({
         content: node.node?.text || node.node?.getContent?.() || '',
         score: node.score || 0,
@@ -379,10 +560,62 @@ export class KnowledgeBaseService {
       }))
       .sort((a, b) => b.score - a.score);
 
+    // 应用过滤逻辑：最少5条，最多10条，超过5条意味着得分都大于9
+    let filteredSources = sources;
+
+    if (sources.length > 5) {
+      // 找出得分大于9的结果
+      const highScoreSources = sources.filter(source => source.score > 9);
+
+      if (highScoreSources.length >= 5) {
+        // 如果高分结果≥5个，返回最多10个高分结果
+        filteredSources = highScoreSources.slice(0, 10);
+      } else {
+        // 如果高分结果<5个，返回前5个结果
+        filteredSources = sources.slice(0, 5);
+      }
+    } else {
+      // 如果总结果≤5个，返回所有结果
+      filteredSources = sources;
+    }
+
     return {
-      answer: response.toString(),
       sources: filteredSources,
+      totalFound: sources.length,
+      returned: filteredSources.length,
     };
+  }
+
+  // 构建LlamaIndex的MetadataFilters
+  private buildMetadataFilters(filterRequest: MetadataFilterRequest): MetadataFilters {
+    const filterList: MetadataFilter[] = filterRequest.filters.map(condition => ({
+      key: condition.key,
+      value: condition.value,
+      operator: condition.operator,
+    }));
+
+    // LlamaIndex期望小写的condition
+    const condition = (filterRequest.condition || 'AND').toLowerCase() as 'and' | 'or';
+
+    return {
+      filters: filterList,
+      condition,
+    };
+  }
+
+
+  // 从元数据schema中提取默认值
+  private extractDefaultMetadata(schema: TypedMetadataSchema): Record<string, any> {
+    const metadata: Record<string, any> = {};
+
+    for (const [fieldName, fieldDef] of Object.entries(schema)) {
+      // 使用schema中定义的example作为默认值
+      if (fieldDef.example !== undefined) {
+        metadata[fieldName] = fieldDef.example;
+      }
+    }
+
+    return metadata;
   }
 
   async linkKnowledgeBaseToAgent(

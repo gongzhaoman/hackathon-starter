@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { apiClient } from '../lib/api';
 import { queryKeys } from '../lib/query-keys';
-import type { Workflow, CreateWorkflowDto, GenerateDslDto, ExecuteWorkflowDto } from '../types';
+import type { CreateWorkflowDto, GenerateDslDto, ExecuteWorkflowDto } from '../types';
 
 // Query Options
 export const workflowQueryOptions = {

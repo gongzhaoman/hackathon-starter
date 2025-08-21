@@ -115,6 +115,7 @@ model KnowledgeBase {
   id                   String                 @id @default(cuid())
   name                 String
   description          String?
+  metadata             Json?
   vectorStoreName      String                 @unique
   createdById          String?
   agentKnowledgeBases  AgentKnowledgeBase[]

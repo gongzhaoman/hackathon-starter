@@ -559,7 +559,7 @@ describe('KnowledgeBaseService', () => {
     it('should return chat response with sources', async () => {
       (prismaService.knowledgeBase.findUnique as jest.Mock).mockResolvedValue(mockKnowledgeBase);
 
-      const result = await service.chat('kb-1', 'What is this about?');
+      const result = await service.query('kb-1', 'What is this about?');
 
       expect(result).toEqual({
         answer: 'Test response',

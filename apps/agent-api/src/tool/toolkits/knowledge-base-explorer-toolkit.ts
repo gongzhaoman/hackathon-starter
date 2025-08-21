@@ -4,7 +4,7 @@ import { BaseToolkit } from './base-toolkit';
 import { PrismaService } from '../../prisma/prisma.service';
 import { Logger } from '@nestjs/common';
 
-@toolkitId('knowledge-base-explorer-toolkit-01')
+@toolkitId('knowledge-base-explorer-toolkit-01', 'SYSTEM')
 export class KnowledgeBaseExplorerToolkit extends BaseToolkit {
   name = 'knowledge base explorer toolkit';
   description = '知识库发现工具包，用于工作流编排时发现和了解可用的知识库';

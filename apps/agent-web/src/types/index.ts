@@ -17,6 +17,7 @@ export interface Toolkit {
   name: string;
   description: string;
   settings: any;
+  type?: 'BUSINESS' | 'SYSTEM';
   deleted: boolean;
   tools: Tool[];
 }
@@ -73,6 +74,7 @@ export interface CreateAgentDto {
   options?: any;
   toolkits?: ToolkitConfigDto[];
   knowledgeBases?: string[];
+  workflows?: string[];
 }
 
 export interface ChatWithAgentDto {

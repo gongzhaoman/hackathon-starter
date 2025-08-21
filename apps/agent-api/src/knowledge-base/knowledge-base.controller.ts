@@ -17,7 +17,7 @@ import {
   UpdateKnowledgeBaseDto,
   AddKnowledgeBaseToAgentDto,
   RemoveKnowledgeBaseFromAgentDto,
-  ChatWithKnowledgeBaseDto,
+  QueryWithMetadataDto,
 } from './knowledge-base.type';
 
 @Controller('knowledge-base')
@@ -46,6 +46,7 @@ export class KnowledgeBaseController {
       userId,
       createKnowledgeBaseDto.name,
       createKnowledgeBaseDto.description || '',
+      createKnowledgeBaseDto.metadataSchema,
     );
   }
 
@@ -134,12 +135,16 @@ export class KnowledgeBaseController {
     return { message: 'File deleted successfully' };
   }
 
-  @Post(':id/chat')
-  async chat(
+  @Post(':id/query')
+  async query(
     @Param('id') id: string,
-    @Body() chatDto: ChatWithKnowledgeBaseDto,
+    @Body() queryDto: QueryWithMetadataDto,
   ) {
-    return this.knowledgeBaseService.chat(id, chatDto.message);
+    return this.knowledgeBaseService.query(
+      id,
+      queryDto.query,
+      queryDto.metadataFilters,
+    );
   }
 
   @Post(':id/link-agent')
