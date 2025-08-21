@@ -67,7 +67,7 @@ export class KnowledgeBaseController {
   @Delete(':id')
   async deleteKnowledgeBase(
     @Param('id') id: string,
-    @Query('userId') userId: string,
+    @Query('userId') userId?: string,
   ) {
     await this.knowledgeBaseService.deleteKnowledgeBase(userId, id);
     return { message: 'Knowledge base deleted successfully' };

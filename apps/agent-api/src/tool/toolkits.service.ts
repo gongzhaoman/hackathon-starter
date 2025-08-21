@@ -82,24 +82,54 @@ export class ToolkitsService implements OnModuleInit {
         },
       });
 
-      const tools = await toolkit.getTools();
-      for (const tool of tools) {
-        await this.prismaService.tool.upsert({
-          where: { name: tool.metadata.name },
-          update: {
-            description: tool.metadata.description,
-            schema: tool.metadata.parameters,
-            toolkitId: toolkit.id,
-          },
-          create: {
-            name: tool.metadata.name,
-            description: tool.metadata.description,
-            schema: tool.metadata.parameters,
-            toolkitId: toolkit.id,
-          },
-        });
-      }
+      // Sync tools for this toolkit
+      await this.syncToolsForToolkit(toolkit);
+      
       this.logger.log(`Synced toolkit to database: ${toolkit.id}`);
+    }
+  }
+
+  private async syncToolsForToolkit(toolkit: Toolkit) {
+    const tools = await toolkit.getTools();
+    const currentToolNames = tools.map(tool => tool.metadata.name);
+
+    // Upsert current tools
+    for (const tool of tools) {
+      await this.prismaService.tool.upsert({
+        where: { 
+          name: tool.metadata.name
+        },
+        update: {
+          description: tool.metadata.description,
+          schema: tool.metadata.parameters,
+          toolkitId: toolkit.id,
+        },
+        create: {
+          name: tool.metadata.name,
+          description: tool.metadata.description,
+          schema: tool.metadata.parameters,
+          toolkitId: toolkit.id,
+        },
+      });
+    }
+
+    // Remove tools that no longer exist in code
+    const dbTools = await this.prismaService.tool.findMany({
+      where: { toolkitId: toolkit.id },
+      select: { id: true, name: true }
+    });
+
+    const toolsToDelete = dbTools.filter(dbTool => !currentToolNames.includes(dbTool.name));
+    
+    if (toolsToDelete.length > 0) {
+      const toolIds = toolsToDelete.map(tool => tool.id);
+      await this.prismaService.tool.deleteMany({
+        where: { 
+          id: { in: toolIds }
+        }
+      });
+      
+      this.logger.warn(`Deleted ${toolsToDelete.length} obsolete tools from toolkit ${toolkit.id}: ${toolsToDelete.map(t => t.name).join(', ')}`);
     }
   }
 

@@ -289,14 +289,19 @@ export class KnowledgeBaseService {
   }
 
   async deleteKnowledgeBase(
-    userId: string,
+    userId: string | undefined,
     knowledgeBaseId: string,
   ): Promise<void> {
     const knowledgeBase = await this.prisma.knowledgeBase.findUnique({
       where: { id: knowledgeBaseId },
     });
 
-    if (!knowledgeBase || knowledgeBase.createdById !== userId) {
+    if (!knowledgeBase) {
+      throw new NotFoundException(`Knowledge base with ID ${knowledgeBaseId} not found`);
+    }
+
+    // 权限检查：如果提供了userId，则检查权限；如果知识库有createdById且与userId不匹配，则拒绝
+    if (userId && knowledgeBase.createdById && knowledgeBase.createdById !== userId) {
       throw new ForbiddenException(
         `You don't have permission to delete this knowledge base`,
       );
