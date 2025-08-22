@@ -4,6 +4,7 @@ import { AgentService } from './agent.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { LlamaindexService } from '../llamaindex/llamaindex.service';
 import { ToolsService } from '../tool/tools.service';
+import { KnowledgeBaseService } from '../knowledge-base/knowledge-base.service';
 import { MockPrismaService, MockLlamaindxService, MockToolsService } from '../test-setup';
 
 describe('AgentService', () => {
@@ -11,15 +12,24 @@ describe('AgentService', () => {
   let prismaService: MockPrismaService;
   let llamaindexService: MockLlamaindxService;
   let toolsService: MockToolsService;
+  let knowledgeBaseService: any;
 
   beforeEach(async () => {
     const mockServices = global.createMockServices();
+    
+    // Create mock for KnowledgeBaseService
+    const mockKnowledgeBaseService = {
+      query: jest.fn(),
+      getAgentKnowledgeBasesForAI: jest.fn().mockResolvedValue([]),
+    };
+
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         AgentService,
         { provide: PrismaService, useValue: mockServices.prisma },
         { provide: LlamaindexService, useValue: mockServices.llamaindex },
         { provide: ToolsService, useValue: mockServices.tools },
+        { provide: KnowledgeBaseService, useValue: mockKnowledgeBaseService },
       ],
     }).compile();
 
@@ -27,6 +37,7 @@ describe('AgentService', () => {
     prismaService = module.get<MockPrismaService>(PrismaService);
     llamaindexService = module.get<MockLlamaindxService>(LlamaindexService);
     toolsService = module.get<MockToolsService>(ToolsService);
+    knowledgeBaseService = module.get<KnowledgeBaseService>(KnowledgeBaseService);
   });
 
   it('should be defined', () => {
@@ -271,6 +282,151 @@ describe('AgentService', () => {
       await expect(service.chatWithAgent('non-existent', { message: 'Hello' })).rejects.toThrow(
         new NotFoundException('Agent with ID non-existent not found')
       );
+    });
+  });
+
+  describe('agentId auto-setting in toolkit settings', () => {
+    it('should automatically set agentId in toolkit settings when creating agent', async () => {
+      const createAgentDto = {
+        name: 'Test Agent',
+        description: 'Test Description',
+        prompt: 'You are a test agent',
+        toolkits: [
+          {
+            toolkitId: 'knowledge-base-toolkit-01',
+            settings: { customSetting: 'value' },
+          },
+        ],
+      };
+
+      const mockAgent = {
+        id: 'agent-1',
+        name: 'Test Agent',
+        description: 'Test Description',
+        prompt: 'You are a test agent',
+        options: {},
+        createdById: 'test-user',
+        deleted: false,
+        isWorkflowGenerated: false,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      };
+
+      const mockToolkit = {
+        id: 'knowledge-base-toolkit-01',
+        name: 'Knowledge Base Toolkit',
+      };
+
+      (prismaService.agent.create as jest.Mock).mockResolvedValue(mockAgent);
+      (prismaService.toolkit.findUnique as jest.Mock).mockResolvedValue(mockToolkit);
+      (prismaService.agentToolkit.create as jest.Mock).mockResolvedValue({});
+
+      await service.create(createAgentDto);
+
+      // 验证 agentToolkit.create 被调用时，settings 中自动包含了 agentId
+      expect(prismaService.agentToolkit.create).toHaveBeenCalledWith({
+        data: {
+          agentId: 'agent-1',
+          toolkitId: 'knowledge-base-toolkit-01',
+          settings: {
+            customSetting: 'value',
+            agentId: 'agent-1', // 应该自动添加这个字段
+          },
+        },
+      });
+    });
+
+    it('should automatically set agentId even when no custom settings provided', async () => {
+      const createAgentDto = {
+        name: 'Test Agent',
+        description: 'Test Description',
+        prompt: 'You are a test agent',
+        toolkits: [
+          {
+            toolkitId: 'knowledge-base-toolkit-01',
+            settings: {},
+          },
+        ],
+      };
+
+      const mockAgent = {
+        id: 'agent-2',
+        name: 'Test Agent',
+        description: 'Test Description',
+        prompt: 'You are a test agent',
+        options: {},
+        createdById: 'test-user',
+        deleted: false,
+        isWorkflowGenerated: false,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      };
+
+      const mockToolkit = {
+        id: 'knowledge-base-toolkit-01',
+        name: 'Knowledge Base Toolkit',
+      };
+
+      (prismaService.agent.create as jest.Mock).mockResolvedValue(mockAgent);
+      (prismaService.toolkit.findUnique as jest.Mock).mockResolvedValue(mockToolkit);
+      (prismaService.agentToolkit.create as jest.Mock).mockResolvedValue({});
+
+      await service.create(createAgentDto);
+
+      // 验证即使没有提供自定义设置，agentId 也会被自动添加
+      expect(prismaService.agentToolkit.create).toHaveBeenCalledWith({
+        data: {
+          agentId: 'agent-2',
+          toolkitId: 'knowledge-base-toolkit-01',
+          settings: {
+            agentId: 'agent-2', // 应该自动添加这个字段
+          },
+        },
+      });
+    });
+
+    it('should automatically set agentId for common toolkit when no toolkits specified', async () => {
+      const createAgentDto = {
+        name: 'Test Agent',
+        description: 'Test Description',
+        prompt: 'You are a test agent',
+        // 没有指定 toolkits，应该自动添加 common toolkit
+      };
+
+      const mockAgent = {
+        id: 'agent-3',
+        name: 'Test Agent',
+        description: 'Test Description',
+        prompt: 'You are a test agent',
+        options: {},
+        createdById: 'test-user',
+        deleted: false,
+        isWorkflowGenerated: false,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      };
+
+      const mockCommonToolkit = {
+        id: 'common-toolkit-01',
+        name: 'Common Toolkit',
+      };
+
+      (prismaService.agent.create as jest.Mock).mockResolvedValue(mockAgent);
+      (prismaService.toolkit.findUnique as jest.Mock).mockResolvedValue(mockCommonToolkit);
+      (prismaService.agentToolkit.create as jest.Mock).mockResolvedValue({});
+
+      await service.create(createAgentDto);
+
+      // 验证 common toolkit 被自动添加，且包含 agentId
+      expect(prismaService.agentToolkit.create).toHaveBeenCalledWith({
+        data: {
+          agentId: 'agent-3',
+          toolkitId: 'common-toolkit-01',
+          settings: {
+            agentId: 'agent-3', // 应该自动添加这个字段
+          },
+        },
+      });
     });
   });
 });

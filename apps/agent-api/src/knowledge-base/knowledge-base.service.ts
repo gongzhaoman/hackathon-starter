@@ -25,7 +25,7 @@ import {
   generateFilterExamples,
   validateFilterCondition
 } from './knowledge-base.type';
-import * as mammoth from 'mammoth';
+import mammoth from 'mammoth';
 
 @Injectable()
 export class KnowledgeBaseService {
@@ -194,6 +194,47 @@ export class KnowledgeBaseService {
     });
   }
 
+  async getAllKnowledgeBasesPaginated(
+    userId?: string,
+    params?: {
+      page: number;
+      pageSize: number;
+      skip: number;
+      search?: string;
+    }
+  ) {
+    const baseWhere = userId ? { createdById: userId } : {};
+
+    // 添加搜索条件
+    const where = params?.search
+      ? {
+          ...baseWhere,
+          OR: [
+            { name: { contains: params.search, mode: 'insensitive' as const } },
+            { description: { contains: params.search, mode: 'insensitive' as const } }
+          ]
+        }
+      : baseWhere;
+
+    const include = {
+      files: true,
+    };
+
+    // 并行执行查询和计数
+    const [data, total] = await Promise.all([
+      this.prisma.knowledgeBase.findMany({
+        where,
+        include,
+        orderBy: { createdAt: 'desc' },
+        skip: params?.skip || 0,
+        take: params?.pageSize || 10,
+      }),
+      this.prisma.knowledgeBase.count({ where })
+    ]);
+
+    return { data, total };
+  }
+
   async getAgentKnowledgeBases(agentId: string) {
     return this.prisma.agentKnowledgeBase.findMany({
       where: { agentId },
@@ -254,7 +295,7 @@ export class KnowledgeBaseService {
     userId: string,
     knowledgeBaseId: string,
     updateKnowledgeBaseDto: UpdateKnowledgeBaseDto,
-  ): Promise<void> {
+  ) {
     const knowledgeBase = await this.prisma.knowledgeBase.findUnique({
       where: { id: knowledgeBaseId },
     });
@@ -265,7 +306,7 @@ export class KnowledgeBaseService {
       );
     }
 
-    await this.prisma.knowledgeBase.update({
+    return await this.prisma.knowledgeBase.update({
       where: { id: knowledgeBaseId },
       data: updateKnowledgeBaseDto,
     });
@@ -517,7 +558,22 @@ export class KnowledgeBaseService {
     return await this.createIndex(vectorStore);
   }
 
-  async query(knowledgeBaseId: string, query: string, metadataFilters?: MetadataFilterRequest) {
+  async query(knowledgeBaseId: string, query: string, metadataFilters?: MetadataFilterRequest, agentId?: string) {
+    // 如果提供了agentId，检查权限
+    if (agentId) {
+      const hasAccess = await this.prisma.agentKnowledgeBase.findUnique({
+        where: {
+          agentId_knowledgeBaseId: {
+            agentId,
+            knowledgeBaseId
+          }
+        }
+      });
+
+      if (!hasAccess) {
+        throw new ForbiddenException('智能体无权限访问该知识库');
+      }
+    }
     const index = await this.getIndex(knowledgeBaseId);
 
     // 获取知识库的元数据schema用于验证

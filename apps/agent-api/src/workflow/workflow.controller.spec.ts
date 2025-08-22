@@ -77,7 +77,7 @@ describe('WorkflowController', () => {
       expect(mockDslWorkflow.execute).toHaveBeenCalledWith({
         description: generateDslDto.description
       });
-      expect(result).toEqual({ dsl: mockWorkflow.DSL });
+      expect(result.data).toEqual({ dsl: mockWorkflow.DSL });
     });
 
     it('should handle DSL generation errors', async () => {
@@ -100,7 +100,7 @@ describe('WorkflowController', () => {
       const result = await controller.createWorkflow(createWorkflowDto);
 
       expect(workflowService.createWorkflow).toHaveBeenCalledWith(createWorkflowDto);
-      expect(result).toEqual(mockWorkflow);
+      expect(result.data).toEqual(mockWorkflow);
     });
 
     it('should handle creation errors', async () => {
@@ -118,7 +118,7 @@ describe('WorkflowController', () => {
       const result = await controller.getAllWorkflows();
 
       expect(workflowService.getAllWorkflows).toHaveBeenCalled();
-      expect(result).toEqual(mockWorkflows);
+      expect(result.data).toEqual(mockWorkflows);
     });
 
     it('should return empty array when no workflows exist', async () => {
@@ -126,7 +126,7 @@ describe('WorkflowController', () => {
 
       const result = await controller.getAllWorkflows();
 
-      expect(result).toEqual([]);
+      expect(result.data).toEqual([]);
     });
   });
 
@@ -137,7 +137,7 @@ describe('WorkflowController', () => {
       const result = await controller.getWorkflow('workflow-1');
 
       expect(workflowService.getWorkflow).toHaveBeenCalledWith('workflow-1');
-      expect(result).toEqual(mockWorkflow);
+      expect(result.data).toEqual(mockWorkflow);
     });
 
     it('should throw NotFoundException when workflow not found', async () => {
@@ -167,7 +167,7 @@ describe('WorkflowController', () => {
         executeDto.input,
         executeDto.context
       );
-      expect(result).toEqual(mockExecutionResult);
+      expect(result.data).toEqual(mockExecutionResult);
     });
 
     it('should execute workflow with only input', async () => {
@@ -184,7 +184,7 @@ describe('WorkflowController', () => {
         executeDtoWithoutContext.input,
         undefined
       );
-      expect(result).toEqual(mockExecutionResult);
+      expect(result.data).toEqual(mockExecutionResult);
     });
 
     it('should throw NotFoundException when workflow not found', async () => {
@@ -212,7 +212,7 @@ describe('WorkflowController', () => {
       const result = await controller.getWorkflowAgents('workflow-1');
 
       expect(workflowService.getWorkflowAgents).toHaveBeenCalledWith('workflow-1');
-      expect(result).toEqual(mockWorkflowAgents);
+      expect(result.data).toEqual(mockWorkflowAgents);
     });
 
     it('should return empty array when workflow has no agents', async () => {
@@ -220,7 +220,7 @@ describe('WorkflowController', () => {
 
       const result = await controller.getWorkflowAgents('workflow-1');
 
-      expect(result).toEqual([]);
+      expect(result.data).toEqual([]);
     });
   });
 
@@ -246,7 +246,7 @@ describe('WorkflowController', () => {
         'TestAgent',
         updateDto
       );
-      expect(result).toEqual(updatedAgent);
+      expect(result.data).toEqual(updatedAgent);
     });
 
     it('should handle partial updates', async () => {
@@ -268,7 +268,7 @@ describe('WorkflowController', () => {
         'TestAgent',
         partialUpdateDto
       );
-      expect(result).toEqual(updatedAgent);
+      expect(result.data).toEqual(updatedAgent);
     });
 
     it('should throw error when workflow agent not found', async () => {
@@ -292,7 +292,8 @@ describe('WorkflowController', () => {
 
       expect(workflowService.deleteWorkflowAgents).toHaveBeenCalledWith('workflow-1');
       expect(workflowService.deleteWorkflow).toHaveBeenCalledWith('workflow-1');
-      expect(result).toEqual(deletedWorkflow);
+      expect(result.success).toBe(true);
+      expect(result.result.operation).toBe('delete');
     });
 
     it('should throw NotFoundException when workflow not found', async () => {
@@ -337,7 +338,7 @@ describe('WorkflowController', () => {
         undefined,
         undefined
       );
-      expect(result).toBeDefined();
+      expect(result.data).toBeDefined();
     });
 
     it('should accept valid CreateWorkflowDto', async () => {
@@ -363,7 +364,7 @@ describe('WorkflowController', () => {
       const result = await controller.createWorkflow(validDto);
 
       expect(workflowService.createWorkflow).toHaveBeenCalledWith(validDto);
-      expect(result).toBeDefined();
+      expect(result.data).toBeDefined();
     });
 
     it('should accept valid ExecuteWorkflowDto', async () => {
@@ -392,7 +393,7 @@ describe('WorkflowController', () => {
         validDto.input,
         validDto.context
       );
-      expect(result.input).toEqual(validDto.input);
+      expect(result.data).toEqual({ ...mockExecutionResult, input: validDto.input });
     });
 
     it('should accept valid UpdateWorkflowAgentDto', async () => {
@@ -420,7 +421,7 @@ describe('WorkflowController', () => {
         'TestAgent',
         validDto
       );
-      expect(result).toEqual(updatedAgent);
+      expect(result.data).toEqual(updatedAgent);
     });
   });
 });

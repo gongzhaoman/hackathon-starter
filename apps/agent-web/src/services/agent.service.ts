@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { apiClient } from '../lib/api';
+import { apiClient, ApiError, PaginationParams } from '../lib/api';
 import { queryKeys } from '../lib/query-keys';
 import type { CreateAgentDto, ChatWithAgentDto } from '../types';
 
@@ -10,6 +10,14 @@ export const agentQueryOptions = {
     queryKey: queryKeys.agents(filters),
     queryFn: () => apiClient.getAgents(),
     staleTime: 2 * 60 * 1000, // 2分钟
+  }),
+
+  // 获取分页智能体
+  listPaginated: (params?: { page?: number; limit?: number } & Record<string, unknown>) => ({
+    queryKey: [...queryKeys.agents(params), 'paginated'],
+    queryFn: () => apiClient.getAgentsPaginated(params),
+    staleTime: 2 * 60 * 1000, // 2分钟
+    keepPreviousData: true, // 保持上一页数据，提供更好的用户体验
   }),
 
   // 获取单个智能体详情
@@ -33,6 +41,15 @@ export const agentQueryOptions = {
 // Hooks
 export const useAgents = () => {
   return useQuery(agentQueryOptions.list());
+};
+
+export const useAgentsPaginated = (params?: PaginationParams) => {
+  return useQuery({
+    queryKey: [...queryKeys.agents(params as Record<string, unknown>), 'paginated'],
+    queryFn: () => apiClient.getAgentsPaginated(params),
+    staleTime: 2 * 60 * 1000,
+    placeholderData: (previousData) => previousData,
+  });
 };
 
 export const useAgent = (id: string) => {
@@ -112,13 +129,55 @@ export const useDeleteAgent = () => {
     },
     onError: (error, __, context) => {
       console.error('删除智能体失败，回滚状态:', error);
+      
+      // 处理API错误
+      if (error instanceof ApiError) {
+        console.error('API错误详情:', {
+          title: error.title,
+          type: error.type,
+          detail: error.message,
+          fields: error.fields,
+          code: error.code,
+          traceId: error.traceId
+        });
+        
+        // 根据错误类型显示不同的提示
+        switch (error.type) {
+          case 'AUTH_ERROR':
+            alert('权限不足，无法删除此智能体');
+            break;
+          case 'BUSINESS_ERROR':
+            if (error.code === 'RESOURCE_NOT_FOUND') {
+              alert('智能体不存在或已被删除');
+            } else if (error.code === 'RESOURCE_IN_USE') {
+              alert('智能体正在使用中，无法删除');
+            } else {
+              alert(`删除失败：${error.message}`);
+            }
+            break;
+          case 'VALIDATION_ERROR':
+            alert('请求参数错误');
+            break;
+          default:
+            alert(`删除失败：${error.message}`);
+        }
+      } else {
+        alert('删除失败: ' + (error as Error).message);
+      }
+      
       // 如果删除失败，回滚到之前的状态
       if (context?.previousAgents) {
         queryClient.setQueryData(queryKeys.agents(), context.previousAgents);
       }
     },
-    onSuccess: (_, deletedId) => {
-      console.log('删除智能体成功:', deletedId);
+    onSuccess: (result, deletedId) => {
+      console.log('删除智能体成功:', deletedId, result);
+      
+      // 显示成功消息
+      if (result && typeof result === 'object' && 'result' in result) {
+        console.log(`智能体删除成功，影响 ${result.result.affected} 条记录`);
+      }
+      
       // 移除智能体详情缓存
       queryClient.removeQueries({ queryKey: queryKeys.agent(deletedId) });
       // 移除相关的工具包缓存

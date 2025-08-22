@@ -9,6 +9,8 @@ import {
   UseInterceptors,
   UploadedFile,
   Query,
+  HttpStatus,
+  HttpCode,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { KnowledgeBaseService } from './knowledge-base.service';
@@ -16,17 +18,37 @@ import {
   CreateKnowledgeBaseDto,
   UpdateKnowledgeBaseDto,
   AddKnowledgeBaseToAgentDto,
-  RemoveKnowledgeBaseFromAgentDto,
   QueryWithMetadataDto,
 } from './knowledge-base.type';
+import type { PaginationQuery } from '../common/types/api-response.types';
+import { ResponseBuilder, validatePagination } from '../common/utils/response-builder.utils';
 
 @Controller('knowledge-base')
 export class KnowledgeBaseController {
   constructor(private readonly knowledgeBaseService: KnowledgeBaseService) {}
 
   @Get()
-  async getAllKnowledgeBases(@Query('userId') userId?: string) {
-    return this.knowledgeBaseService.getAllKnowledgeBases(userId);
+  async getAllKnowledgeBases(
+    @Query('userId') userId?: string,
+    @Query() query?: PaginationQuery
+  ) {
+    // 如果有分页参数，返回分页结果
+    if (query?.page || query?.pageSize) {
+      const { page, pageSize, skip } = validatePagination(query);
+      const result = await this.knowledgeBaseService.getAllKnowledgeBasesPaginated(
+        userId, 
+        { page, pageSize, skip, search: query.search }
+      );
+      
+      return ResponseBuilder.paginated(
+        result.data,
+        { page, pageSize, total: result.total },
+        `获取到 ${result.data.length} 个知识库`
+      );
+    }
+
+    const knowledgeBases = await this.knowledgeBaseService.getAllKnowledgeBases(userId);
+    return ResponseBuilder.success(knowledgeBases, `获取到 ${knowledgeBases.length} 个知识库`);
   }
 
   @Get(':id')
@@ -34,20 +56,23 @@ export class KnowledgeBaseController {
     @Param('id') id: string,
     @Query('userId') userId?: string,
   ) {
-    return this.knowledgeBaseService.getKnowledgeBase(userId, id);
+    const knowledgeBase = await this.knowledgeBaseService.getKnowledgeBase(userId, id);
+    return ResponseBuilder.success(knowledgeBase, '获取知识库详情成功');
   }
 
   @Post()
+  @HttpCode(HttpStatus.CREATED)
   async createKnowledgeBase(
     @Body() createKnowledgeBaseDto: CreateKnowledgeBaseDto,
     @Query('userId') userId?: string,
   ) {
-    return this.knowledgeBaseService.createKnowledgeBase(
+    const knowledgeBase = await this.knowledgeBaseService.createKnowledgeBase(
       userId,
       createKnowledgeBaseDto.name,
       createKnowledgeBaseDto.description || '',
       createKnowledgeBaseDto.metadataSchema,
     );
+    return ResponseBuilder.created(knowledgeBase, '知识库创建成功');
   }
 
   @Put(':id')
@@ -56,12 +81,12 @@ export class KnowledgeBaseController {
     @Body() updateKnowledgeBaseDto: UpdateKnowledgeBaseDto,
     @Query('userId') userId: string,
   ) {
-    await this.knowledgeBaseService.updateKnowledgeBase(
+    const updatedKnowledgeBase = await this.knowledgeBaseService.updateKnowledgeBase(
       userId,
       id,
       updateKnowledgeBaseDto,
     );
-    return { message: 'Knowledge base updated successfully' };
+    return ResponseBuilder.updated(updatedKnowledgeBase, '知识库更新成功');
   }
 
   @Delete(':id')
@@ -70,7 +95,7 @@ export class KnowledgeBaseController {
     @Query('userId') userId?: string,
   ) {
     await this.knowledgeBaseService.deleteKnowledgeBase(userId, id);
-    return { message: 'Knowledge base deleted successfully' };
+    return ResponseBuilder.deleted(id);
   }
 
   @Post(':id/files')
@@ -85,10 +110,7 @@ export class KnowledgeBaseController {
       id,
       file,
     );
-    return {
-      message: 'File uploaded successfully',
-      file: uploadedFile,
-    };
+    return ResponseBuilder.success(uploadedFile, '文件上传成功');
   }
 
   @Get(':id/files')
@@ -96,7 +118,8 @@ export class KnowledgeBaseController {
     @Param('id') id: string,
     @Query('userId') userId: string,
   ) {
-    return this.knowledgeBaseService.getFiles(userId, id);
+    const files = await this.knowledgeBaseService.getFiles(userId, id);
+    return ResponseBuilder.success(files, `获取到 ${files.length} 个文件`);
   }
 
   @Get(':id/files/:fileId')
@@ -105,7 +128,8 @@ export class KnowledgeBaseController {
     @Param('fileId') fileId: string,
     @Query('userId') userId: string,
   ) {
-    return this.knowledgeBaseService.getFileStatus(userId, id, fileId);
+    const fileStatus = await this.knowledgeBaseService.getFileStatus(userId, id, fileId);
+    return ResponseBuilder.success(fileStatus, '获取文件状态成功');
   }
 
   @Post(':id/files/:fileId/train')
@@ -119,10 +143,7 @@ export class KnowledgeBaseController {
       id,
       fileId,
     );
-    return {
-      message: 'File training completed',
-      status: result.status,
-    };
+    return ResponseBuilder.success(result, '文件训练完成');
   }
 
   @Delete(':id/files/:fileId')
@@ -132,7 +153,7 @@ export class KnowledgeBaseController {
     @Query('userId') userId: string,
   ) {
     await this.knowledgeBaseService.deleteFile(userId, id, fileId);
-    return { message: 'File deleted successfully' };
+    return ResponseBuilder.deleted(fileId, 1);
   }
 
   @Post(':id/query')
@@ -140,41 +161,45 @@ export class KnowledgeBaseController {
     @Param('id') id: string,
     @Body() queryDto: QueryWithMetadataDto,
   ) {
-    return this.knowledgeBaseService.query(
+    const result = await this.knowledgeBaseService.query(
       id,
       queryDto.query,
       queryDto.metadataFilters,
     );
+    return ResponseBuilder.success(result, '知识库查询成功');
   }
 
-  @Post(':id/link-agent')
+  @Post(':id/agents')
   async linkToAgent(
     @Param('id') id: string,
     @Body() body: AddKnowledgeBaseToAgentDto,
     @Query('userId') userId: string,
   ) {
-    return this.knowledgeBaseService.linkKnowledgeBaseToAgent(
+    const result = await this.knowledgeBaseService.linkKnowledgeBaseToAgent(
       userId,
       id,
       body.agentId,
     );
+    return ResponseBuilder.success(result, '知识库已成功关联到智能体');
   }
 
-  @Delete(':id/unlink-agent')
+  @Delete(':id/agents/:agentId')
   async unlinkFromAgent(
     @Param('id') id: string,
-    @Body() body: RemoveKnowledgeBaseFromAgentDto,
+    @Param('agentId') agentId: string,
     @Query('userId') userId: string,
   ) {
-    return this.knowledgeBaseService.unlinkKnowledgeBaseFromAgent(
+    await this.knowledgeBaseService.unlinkKnowledgeBaseFromAgent(
       userId,
       id,
-      body.agentId,
+      agentId,
     );
+    return ResponseBuilder.deleted(agentId, 1);
   }
 
   @Get('agent/:agentId')
   async getAgentKnowledgeBases(@Param('agentId') agentId: string) {
-    return this.knowledgeBaseService.getAgentKnowledgeBases(agentId);
+    const knowledgeBases = await this.knowledgeBaseService.getAgentKnowledgeBases(agentId);
+    return ResponseBuilder.success(knowledgeBases, `获取到 ${knowledgeBases.length} 个关联的知识库`);
   }
 }

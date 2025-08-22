@@ -51,18 +51,18 @@ describe('AgentController', () => {
       const mockAgents = [mockAgent];
       agentService.findAll.mockResolvedValue(mockAgents);
 
-      const result = await controller.findAll();
+      const result = await controller.findAll({});
 
       expect(agentService.findAll).toHaveBeenCalled();
-      expect(result).toEqual(mockAgents);
+      expect(result.data).toEqual(mockAgents);
     });
 
     it('should return empty array when no agents exist', async () => {
       agentService.findAll.mockResolvedValue([]);
 
-      const result = await controller.findAll();
+      const result = await controller.findAll({});
 
-      expect(result).toEqual([]);
+      expect(result.data).toEqual([]);
     });
   });
 
@@ -73,7 +73,7 @@ describe('AgentController', () => {
       const result = await controller.findOne('agent-1');
 
       expect(agentService.findOne).toHaveBeenCalledWith('agent-1');
-      expect(result).toEqual(mockAgent);
+      expect(result.data).toEqual(mockAgent);
     });
 
     it('should throw NotFoundException when agent not found', async () => {
@@ -102,7 +102,7 @@ describe('AgentController', () => {
       const result = await controller.create(createAgentDto);
 
       expect(agentService.create).toHaveBeenCalledWith(createAgentDto);
-      expect(result).toEqual(createdAgent);
+      expect(result.data).toEqual(createdAgent);
     });
 
     it('should create agent with toolkits', async () => {
@@ -118,7 +118,7 @@ describe('AgentController', () => {
       const result = await controller.create(createAgentDtoWithToolkits);
 
       expect(agentService.create).toHaveBeenCalledWith(createAgentDtoWithToolkits);
-      expect(result).toEqual(createdAgent);
+      expect(result.data).toEqual(createdAgent);
     });
 
     it('should create agent with knowledge bases', async () => {
@@ -132,7 +132,7 @@ describe('AgentController', () => {
       const result = await controller.create(createAgentDtoWithKB);
 
       expect(agentService.create).toHaveBeenCalledWith(createAgentDtoWithKB);
-      expect(result).toEqual(createdAgent);
+      expect(result.data).toEqual(createdAgent);
     });
   });
 
@@ -149,7 +149,7 @@ describe('AgentController', () => {
       const result = await controller.update('agent-1', updateAgentDto);
 
       expect(agentService.update).toHaveBeenCalledWith('agent-1', updateAgentDto);
-      expect(result).toEqual(updatedAgent);
+      expect(result.data).toEqual(updatedAgent);
     });
 
     it('should update agent with new toolkits', async () => {
@@ -165,7 +165,7 @@ describe('AgentController', () => {
       const result = await controller.update('agent-1', updateAgentDtoWithToolkits);
 
       expect(agentService.update).toHaveBeenCalledWith('agent-1', updateAgentDtoWithToolkits);
-      expect(result).toEqual(updatedAgent);
+      expect(result.data).toEqual(updatedAgent);
     });
 
     it('should throw NotFoundException when agent not found', async () => {
@@ -187,7 +187,7 @@ describe('AgentController', () => {
       const result = await controller.remove('agent-1');
 
       expect(agentService.remove).toHaveBeenCalledWith('agent-1');
-      expect(result).toEqual(deletedAgent);
+      expect(result.result.resourceId).toEqual("agent-1");
     });
 
     it('should throw NotFoundException when agent not found', async () => {
@@ -213,7 +213,7 @@ describe('AgentController', () => {
       const result = await controller.chat('agent-1', chatDto);
 
       expect(agentService.chatWithAgent).toHaveBeenCalledWith('agent-1', chatDto);
-      expect(result).toEqual(mockChatResponse);
+      expect(result.data).toEqual(mockChatResponse);
     });
 
     it('should chat with agent without context', async () => {
@@ -230,7 +230,7 @@ describe('AgentController', () => {
       const result = await controller.chat('agent-1', chatDtoWithoutContext);
 
       expect(agentService.chatWithAgent).toHaveBeenCalledWith('agent-1', chatDtoWithoutContext);
-      expect(result).toEqual(responseWithoutContext);
+      expect(result.data).toEqual(responseWithoutContext);
     });
 
     it('should throw NotFoundException when agent not found', async () => {
@@ -251,7 +251,7 @@ describe('AgentController', () => {
       const result = await controller.getAgentToolkits('agent-1');
 
       expect(agentService.getAgentToolkits).toHaveBeenCalledWith('agent-1');
-      expect(result).toEqual(mockAgentToolkits);
+      expect(result.data).toEqual(mockAgentToolkits);
     });
 
     it('should return empty array when agent has no toolkits', async () => {
@@ -259,7 +259,7 @@ describe('AgentController', () => {
 
       const result = await controller.getAgentToolkits('agent-1');
 
-      expect(result).toEqual([]);
+      expect(result.data).toEqual([]);
     });
 
     it('should throw NotFoundException when agent not found', async () => {
@@ -278,7 +278,7 @@ describe('AgentController', () => {
       const errorMessage = 'Database connection failed';
       agentService.findAll.mockRejectedValue(new Error(errorMessage));
 
-      await expect(controller.findAll()).rejects.toThrow(errorMessage);
+      await expect(controller.findAll({})).rejects.toThrow(errorMessage);
     });
 
     it('should handle validation errors from service', async () => {
@@ -353,8 +353,8 @@ describe('AgentController', () => {
       const result = await controller.chat('agent-1', validDto);
 
       expect(agentService.chatWithAgent).toHaveBeenCalledWith('agent-1', validDto);
-      expect(result.userMessage).toEqual(validDto.message);
-      expect(result.context).toEqual(validDto.context);
+      expect(result.data.userMessage).toEqual(validDto.message);
+      expect(result.data.context).toEqual(validDto.context);
     });
   });
 });

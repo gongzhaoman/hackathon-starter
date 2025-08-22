@@ -575,6 +575,39 @@ const classification = JSON.parse(resultString); // 如果需要结构化数据�
     });
   }
 
+  async getAllWorkflowsPaginated(params: {
+    page: number;
+    pageSize: number;
+    skip: number;
+    search?: string;
+  }) {
+    const baseWhere = { deleted: false };
+
+    // 添加搜索条件
+    const where = params.search
+      ? {
+          ...baseWhere,
+          OR: [
+            { name: { contains: params.search, mode: 'insensitive' as const } },
+            { description: { contains: params.search, mode: 'insensitive' as const } }
+          ]
+        }
+      : baseWhere;
+
+    // 并行执行查询和计数
+    const [data, total] = await Promise.all([
+      this.prismaService.workFlow.findMany({
+        where,
+        orderBy: { createdAt: 'desc' },
+        skip: params.skip,
+        take: params.pageSize,
+      }),
+      this.prismaService.workFlow.count({ where })
+    ]);
+
+    return { data, total };
+  }
+
   async getWorkflow(id: string) {
     const workflow = await this.prismaService.workFlow.findUnique({
       where: { id, deleted: false },

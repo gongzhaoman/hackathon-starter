@@ -555,8 +555,8 @@ describe('KnowledgeBaseService', () => {
     });
   });
 
-  describe('chat', () => {
-    it('should return chat response with sources', async () => {
+  describe('query', () => {
+    it('should return query response when no agentId provided', async () => {
       (prismaService.knowledgeBase.findUnique as jest.Mock).mockResolvedValue(mockKnowledgeBase);
 
       const result = await service.query('kb-1', 'What is this about?');
@@ -564,6 +564,46 @@ describe('KnowledgeBaseService', () => {
       expect(result).toEqual({
         answer: 'Test response',
         sources: [],
+      });
+    });
+
+    it('should return query response when agentId has access', async () => {
+      (prismaService.knowledgeBase.findUnique as jest.Mock).mockResolvedValue(mockKnowledgeBase);
+      (prismaService.agentKnowledgeBase.findUnique as jest.Mock).mockResolvedValue({
+        id: 'akb-1',
+        agentId: 'agent-1',
+        knowledgeBaseId: 'kb-1'
+      });
+
+      const result = await service.query('kb-1', 'What is this about?', undefined, 'agent-1');
+
+      expect(prismaService.agentKnowledgeBase.findUnique).toHaveBeenCalledWith({
+        where: {
+          agentId_knowledgeBaseId: {
+            agentId: 'agent-1',
+            knowledgeBaseId: 'kb-1'
+          }
+        }
+      });
+      expect(result).toEqual({
+        answer: 'Test response',
+        sources: [],
+      });
+    });
+
+    it('should throw ForbiddenException when agentId has no access', async () => {
+      (prismaService.agentKnowledgeBase.findUnique as jest.Mock).mockResolvedValue(null);
+
+      await expect(service.query('kb-1', 'What is this about?', undefined, 'agent-1'))
+        .rejects.toThrow('智能体无权限访问该知识库');
+
+      expect(prismaService.agentKnowledgeBase.findUnique).toHaveBeenCalledWith({
+        where: {
+          agentId_knowledgeBaseId: {
+            agentId: 'agent-1',
+            knowledgeBaseId: 'kb-1'
+          }
+        }
       });
     });
   });

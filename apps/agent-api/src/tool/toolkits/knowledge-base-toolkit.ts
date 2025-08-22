@@ -3,7 +3,7 @@ import { toolkitId } from '../toolkits.decorator';
 import { BaseToolkit } from './base-toolkit';
 import { KnowledgeBaseService } from '../../knowledge-base/knowledge-base.service';
 import { MetadataFilterRequest } from '../../knowledge-base/knowledge-base.type';
-import { Logger } from '@nestjs/common';
+import { Logger, ForbiddenException } from '@nestjs/common';
 
 @toolkitId('knowledge-base-toolkit-01')
 export class KnowledgeBaseToolkit extends BaseToolkit {
@@ -23,20 +23,10 @@ export class KnowledgeBaseToolkit extends BaseToolkit {
         async ({ knowledgeBaseId, query, metadataFilters }: { 
           knowledgeBaseId: string; 
           query: string; 
-          metadataFilters?: MetadataFilterRequest 
+          metadataFilters?: MetadataFilterRequest;
         }) => {
           try {
-            // 验证智能体是否有权限访问该知识库
-            const agentKnowledgeBases = await this.knowledgeBaseService.getAgentKnowledgeBases(
-              this.settings.agentId as string,
-            );
-            const hasAccess = agentKnowledgeBases.some((akb: any) => akb.knowledgeBase.id === knowledgeBaseId);
-
-            if (!hasAccess) {
-              return JSON.stringify({ error: '智能体无权限访问该知识库' }, null, 2);
-            }
-
-            const result = await this.knowledgeBaseService.query(knowledgeBaseId, query, metadataFilters);
+            const result = await this.knowledgeBaseService.query(knowledgeBaseId, query, metadataFilters, this.settings.agentId as string);
             this.logger.log('Query:', query);
             this.logger.log('Metadata Filters:', JSON.stringify(metadataFilters, null, 2));
             this.logger.log('Result:', JSON.stringify(result, null, 2));

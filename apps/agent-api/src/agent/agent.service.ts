@@ -41,6 +41,67 @@ export class AgentService {
     });
   }
 
+  async findAllPaginated(params: {
+    page: number;
+    pageSize: number;
+    skip: number;
+    sortBy?: string;
+    sortOrder?: 'asc' | 'desc';
+    search?: string;
+  }) {
+    const baseWhere = {
+      deleted: false,
+      isWorkflowGenerated: false
+    };
+
+    // 添加搜索条件
+    const where = params.search
+      ? {
+          ...baseWhere,
+          OR: [
+            { name: { contains: params.search, mode: 'insensitive' as const } },
+            { description: { contains: params.search, mode: 'insensitive' as const } }
+          ]
+        }
+      : baseWhere;
+
+    // 构建排序条件
+    const orderBy = params.sortBy
+      ? { [params.sortBy]: params.sortOrder || 'desc' }
+      : { createdAt: 'desc' as const };
+
+    const include = {
+      agentToolkits: {
+        include: {
+          toolkit: {
+            include: {
+              tools: true,
+            },
+          },
+        },
+      },
+      agentKnowledgeBases: {
+        include: {
+          knowledgeBase: true,
+        },
+      },
+    };
+
+    // 并行执行查询和计数
+    const [data, total] = await Promise.all([
+      this.prisma.agent.findMany({
+        where,
+        include,
+        orderBy,
+        skip: params.skip,
+        take: params.pageSize,
+      }),
+      this.prisma.agent.count({ where })
+    ]);
+
+    return { data, total };
+  }
+
   async findOne(id: string) {
     const agent = await this.prisma.agent.findUnique({
       where: { id, deleted: false },
@@ -124,11 +185,17 @@ export class AgentService {
         });
 
         if (toolkit) {
+          // 自动在 settings 中添加 agentId，确保每个 toolkit 实例都知道自己归属的 agent
+          const enhancedSettings = {
+            ...config.settings,
+            agentId: agentId, // 自动设置 agentId
+          };
+          
           await this.prisma.agentToolkit.create({
             data: {
               agentId: agentId,
               toolkitId: config.toolkitId,
-              settings: config.settings,
+              settings: enhancedSettings,
             },
           });
         } else {

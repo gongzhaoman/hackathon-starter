@@ -202,6 +202,53 @@ export class ToolkitsService implements OnModuleInit {
     });
   }
 
+  async getAllToolkitsPaginated(params: {
+    page: number;
+    pageSize: number;
+    skip: number;
+    search?: string;
+  }) {
+    const baseWhere = {
+      deleted: false,
+      type: 'BUSINESS' as const
+    };
+
+    // 添加搜索条件
+    const where = params.search
+      ? {
+          ...baseWhere,
+          OR: [
+            { name: { contains: params.search, mode: 'insensitive' as const } },
+            { description: { contains: params.search, mode: 'insensitive' as const } }
+          ]
+        }
+      : baseWhere;
+
+    const include = {
+      tools: {
+        select: {
+          id: true,
+          name: true,
+          description: true,
+        },
+      },
+    };
+
+    // 并行执行查询和计数
+    const [data, total] = await Promise.all([
+      this.prismaService.toolkit.findMany({
+        where,
+        include,
+        orderBy: { name: 'asc' },
+        skip: params.skip,
+        take: params.pageSize,
+      }),
+      this.prismaService.toolkit.count({ where })
+    ]);
+
+    return { data, total };
+  }
+
   async getAgentToolkits(agentId: string) {
     return this.prismaService.agentToolkit.findMany({
       where: { agentId },

@@ -2,6 +2,8 @@ import { NestFactory } from '@nestjs/core';
 import { ValidationPipe } from '@nestjs/common';
 
 import { AppModule } from './app.module';
+import { ResponseInterceptor } from './common/interceptors/response.interceptor';
+import { GlobalExceptionFilter } from './common/filters/http-exception.filter';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
@@ -23,6 +25,12 @@ async function bootstrap() {
     forbidNonWhitelisted: true,
     transform: true,
   }));
+
+  // 启用全局异常过滤器
+  app.useGlobalFilters(new GlobalExceptionFilter());
+
+  // 启用全局响应拦截器
+  app.useGlobalInterceptors(new ResponseInterceptor());
 
   // 设置全局前缀
   app.setGlobalPrefix('api');

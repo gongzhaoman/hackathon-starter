@@ -53,9 +53,9 @@ describe('ToolkitsController', () => {
       const result = await controller.getAllToolkits();
 
       expect(toolkitsService.getAllToolkits).toHaveBeenCalled();
-      expect(result).toEqual(mockToolkits);
-      expect(result[0].tools).toHaveLength(2);
-      expect(result[0].tools[0]).toEqual({
+      expect(result.data).toEqual(mockToolkits);
+      expect(result.data[0].tools).toHaveLength(2);
+      expect(result.data[0].tools[0]).toEqual({
         id: 'tool-1',
         name: 'getCurrentTime',
         description: 'Get current time',
@@ -69,10 +69,10 @@ describe('ToolkitsController', () => {
       const result = await controller.getAllToolkits();
 
       expect(toolkitsService.getAllToolkits).toHaveBeenCalled();
-      expect(result).toEqual(mockToolkits);
-      expect(result).toHaveLength(2);
-      expect(result[0].tools).toHaveLength(2);
-      expect(result[1].tools).toHaveLength(0);
+      expect(result.data).toEqual(mockToolkits);
+      expect(result.data).toHaveLength(2);
+      expect(result.data[0].tools).toHaveLength(2);
+      expect(result.data[1].tools).toHaveLength(0);
     });
 
     it('should return empty array when no toolkits exist', async () => {
@@ -81,7 +81,7 @@ describe('ToolkitsController', () => {
       const result = await controller.getAllToolkits();
 
       expect(toolkitsService.getAllToolkits).toHaveBeenCalled();
-      expect(result).toEqual([]);
+      expect(result.data).toEqual([]);
     });
 
     it('should handle service errors', async () => {
@@ -101,7 +101,7 @@ describe('ToolkitsController', () => {
 
       const result = await controller.getAllToolkits();
 
-      expect(result).toEqual(mockToolkits);
+      expect(result.data).toEqual(mockToolkits);
       // Verify that the service is responsible for ordering
       expect(toolkitsService.getAllToolkits).toHaveBeenCalled();
     });
@@ -112,14 +112,14 @@ describe('ToolkitsController', () => {
 
       const result = await controller.getAllToolkits();
 
-      expect(result[0]).toHaveProperty('id');
-      expect(result[0]).toHaveProperty('name');
-      expect(result[0]).toHaveProperty('description');
-      expect(result[0]).toHaveProperty('settings');
-      expect(result[0]).toHaveProperty('deleted');
-      expect(result[0]).toHaveProperty('createdAt');
-      expect(result[0]).toHaveProperty('updatedAt');
-      expect(result[0]).toHaveProperty('tools');
+      expect(result.data[0]).toHaveProperty('id');
+      expect(result.data[0]).toHaveProperty('name');
+      expect(result.data[0]).toHaveProperty('description');
+      expect(result.data[0]).toHaveProperty('settings');
+      expect(result.data[0]).toHaveProperty('deleted');
+      expect(result.data[0]).toHaveProperty('createdAt');
+      expect(result.data[0]).toHaveProperty('updatedAt');
+      expect(result.data[0]).toHaveProperty('tools');
     });
 
     it('should include all expected tool properties', async () => {
@@ -128,7 +128,7 @@ describe('ToolkitsController', () => {
 
       const result = await controller.getAllToolkits();
 
-      const tool = result[0].tools[0];
+      const tool = result.data[0].tools[0];
       expect(tool).toHaveProperty('id');
       expect(tool).toHaveProperty('name');
       expect(tool).toHaveProperty('description');
@@ -152,7 +152,7 @@ describe('ToolkitsController', () => {
 
       const result = await controller.getAllToolkits();
 
-      expect(result[0].settings).toEqual(toolkitWithComplexSettings.settings);
+      expect(result.data[0].settings).toEqual(toolkitWithComplexSettings.settings);
     });
 
     it('should handle toolkits with null settings', async () => {
@@ -165,7 +165,7 @@ describe('ToolkitsController', () => {
 
       const result = await controller.getAllToolkits();
 
-      expect(result[0].settings).toBeNull();
+      expect(result.data[0].settings).toBeNull();
     });
 
     it('should only return non-deleted toolkits', async () => {
@@ -176,7 +176,7 @@ describe('ToolkitsController', () => {
 
       const result = await controller.getAllToolkits();
 
-      expect(result.every(toolkit => !toolkit.deleted)).toBe(true);
+      expect(result.data.every(toolkit => !toolkit.deleted)).toBe(true);
     });
   });
 
@@ -208,7 +208,7 @@ describe('ToolkitsController', () => {
 
       const result = await controller.getAllToolkits();
 
-      expect(result).toHaveLength(100);
+      expect(result.data).toHaveLength(100);
       expect(toolkitsService.getAllToolkits).toHaveBeenCalledTimes(1);
     });
 
@@ -226,7 +226,7 @@ describe('ToolkitsController', () => {
 
       const result = await controller.getAllToolkits();
 
-      expect(result[0].tools).toHaveLength(50);
+      expect(result.data[0].tools).toHaveLength(50);
     });
   });
 });
