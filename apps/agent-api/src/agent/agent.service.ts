@@ -395,4 +395,39 @@ export class AgentService {
     return `${originalPrompt}${knowledgeBaseSummary}`;
   }
 
+  // 处理消息的方法，用于定时任务和对话服务
+  async processMessage(agentId: string, messages: Array<{ role: string; content: string }>) {
+    // 获取智能体信息
+    const agent = await this.findOne(agentId);
+
+    // 获取智能体的工具
+    const tools = await this.toolsService.getAgentTools(agentId);
+
+    // 生成增强的系统提示词（包含知识库信息）
+    const enhancedPrompt = await this.generateEnhancedPrompt(agentId, agent.prompt);
+    
+    // 创建智能体实例
+    const agentInstance = await this.llamaIndexService.createAgent(
+      tools,
+      enhancedPrompt,
+    );
+
+    // 获取最后一条用户消息
+    const lastUserMessage = messages.filter(msg => msg.role === 'user').pop()?.content || '';
+
+    try {
+      // 执行对话
+      const response = await agentInstance.run(lastUserMessage);
+
+      return {
+        content: response.data.result,
+        toolCalls: response.data.toolCalls || [],
+        usage: response.data.usage || {},
+      };
+    } catch (error: any) {
+      console.error('Error processing message:', error);
+      throw new Error(`处理消息失败: ${error.message || error}`);
+    }
+  }
+
 }

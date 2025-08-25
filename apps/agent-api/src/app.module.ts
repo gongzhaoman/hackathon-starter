@@ -6,6 +6,8 @@ import { PrismaModule } from './prisma/prisma.module';
 import { ToolsModule } from './tool/tools.module';
 import { WorkflowModule } from './workflow/workflow.module';
 import { KnowledgeBaseModule } from './knowledge-base/knowledge-base.module';
+import { ScheduledTaskModule } from './scheduled-task/scheduled-task.module';
+import { ConversationModule } from './conversation/conversation.module';
 import { ConfigModule } from '@nestjs/config';
 import { HealthModule } from './health/health.module';
 
@@ -20,6 +22,8 @@ import { HealthModule } from './health/health.module';
     AgentModule,
     LlamaIndexModule,
     KnowledgeBaseModule,
+    ScheduledTaskModule,
+    ConversationModule,
     HealthModule,
   ],
   controllers: [],

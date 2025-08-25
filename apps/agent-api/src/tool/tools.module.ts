@@ -4,15 +4,17 @@ import { DiscoveryModule } from '@nestjs/core';
 import { CommonToolkit } from './toolkits/common-toolkit';
 import { ToolExplorerToolkit } from './toolkits/tool-explorer-toolkit';
 import { KnowledgeBaseToolkit } from './toolkits/knowledge-base-toolkit';
+import { ScheduledTaskToolkit } from './toolkits/scheduled-task-toolkit';
 import { ToolkitsController } from './toolkits.controller';
 import { ToolkitsService } from './toolkits.service';
 import { ToolsService } from './tools.service';
 import { LlamaIndexModule } from '../llamaindex/llamaindex.module';
 import { KnowledgeBaseModule } from '../knowledge-base/knowledge-base.module';
+import { ScheduledTaskModule } from '../scheduled-task/scheduled-task.module';
 import { PrismaModule } from '../prisma/prisma.module';
 
 @Module({
-  imports: [DiscoveryModule, LlamaIndexModule, KnowledgeBaseModule, PrismaModule],
+  imports: [DiscoveryModule, LlamaIndexModule, KnowledgeBaseModule, ScheduledTaskModule, PrismaModule],
   controllers: [ToolkitsController],
   providers: [
     ToolsService,
@@ -20,6 +22,7 @@ import { PrismaModule } from '../prisma/prisma.module';
     CommonToolkit,
     ToolExplorerToolkit,
     KnowledgeBaseToolkit,
+    ScheduledTaskToolkit,
   ],
   exports: [ToolsService, ToolkitsService],
 })

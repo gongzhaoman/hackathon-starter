@@ -17,6 +17,8 @@ model Agent {
   agentTools           AgentTool[]
   agentKnowledgeBases  AgentKnowledgeBase[]
   workflowAgents       WorkflowAgent[]
+  scheduledTasks       ScheduledTask[]
+  conversations        Conversation[]
   createdById          String?
   isWorkflowGenerated  Boolean                @default(false)
   createdAt            DateTime               @default(now())
@@ -161,5 +163,79 @@ enum FileStatus {
 
 enum ToolkitType {
   BUSINESS
+  SYSTEM
+}
+
+model ScheduledTask {
+  id             String   @id @default(cuid())
+  name           String
+  description    String?
+  agentId        String
+  triggerPrompt  String
+  cronExpression String
+  timezone       String   @default("Asia/Shanghai")
+  enabled        Boolean  @default(true)
+  lastRun        DateTime?
+  nextRun        DateTime?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  agent          Agent           @relation(fields: [agentId], references: [id], onDelete: Cascade)
+  executions     TaskExecution[]
+
+  @@map("scheduled_tasks")
+}
+
+model TaskExecution {
+  id             String              @id @default(cuid())
+  taskId         String
+  status         TaskExecutionStatus
+  startTime      DateTime            @default(now())
+  endTime        DateTime?
+  error          String?
+  conversationId String?
+
+  task           ScheduledTask       @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  conversation   Conversation?       @relation(fields: [conversationId], references: [id])
+
+  @@map("task_executions")
+}
+
+model Conversation {
+  id             String          @id @default(cuid())
+  agentId        String
+  title          String?
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+
+  agent          Agent           @relation(fields: [agentId], references: [id], onDelete: Cascade)
+  messages       Message[]
+  taskExecutions TaskExecution[]
+
+  @@map("conversations")
+}
+
+model Message {
+  id             String      @id @default(cuid())
+  conversationId String
+  role           MessageRole
+  content        String
+  metadata       Json?
+  createdAt      DateTime    @default(now())
+
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+
+  @@map("messages")
+}
+
+enum TaskExecutionStatus {
+  RUNNING
+  COMPLETED
+  FAILED
+}
+
+enum MessageRole {
+  USER
+  ASSISTANT
   SYSTEM
 }
