@@ -43,6 +43,7 @@ export type MockPrismaService = Partial<PrismaService> & {
   };
   tool: {
     upsert: jest.Mock;
+    findMany: jest.Mock;
   };
 };
 
@@ -107,6 +108,7 @@ global.createMockServices = () => ({
     },
     tool: {
       upsert: jest.fn(),
+      findMany: jest.fn(),
     },
   } as MockPrismaService,
   

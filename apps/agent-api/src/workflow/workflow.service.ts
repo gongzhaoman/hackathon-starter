@@ -43,10 +43,12 @@ ${JSON.stringify(agent.output, null, 2)}
 
       // 如果有 workflowId，尝试查找已存在的工作流智能体
       if (workflowId) {
-        const existingWorkflowAgent = await this.prismaService.workflowAgent.findFirst({
+        const existingWorkflowAgent = await this.prismaService.workflowAgent.findUnique({
           where: {
-            workflowId: workflowId,
-            agentName: agent.name,
+            workflowId_agentName: {
+              workflowId: workflowId,
+              agentName: agent.name,
+            },
           },
           include: {
             agent: true,
@@ -67,7 +69,8 @@ ${JSON.stringify(agent.output, null, 2)}
             description: agent.description || `工作流智能体: ${agent.name}`,
             prompt: agent.prompt,
             options: agent.output || {},
-            createdById: 'workflow-system',
+            createdById: 'default-user-id',
+            organizationId: 'default-org-id',
             isWorkflowGenerated: true,  // 标记为工作流生成的智能体
           },
         });
@@ -108,10 +111,12 @@ ${JSON.stringify(agent.output, null, 2)}
         }
 
         // 确保知识库工具包存在
-        const existingKbToolkit = await this.prismaService.agentToolkit.findFirst({
+        const existingKbToolkit = await this.prismaService.agentToolkit.findUnique({
           where: {
-            agentId: persistentAgent.id,
-            toolkitId: 'knowledge-base-toolkit-01',
+            agentId_toolkitId: {
+              agentId: persistentAgent.id,
+              toolkitId: 'knowledge-base-toolkit-01',
+            },
           },
         });
 
@@ -135,7 +140,7 @@ ${JSON.stringify(agent.output, null, 2)}
       if (agent.toolkits && agent.toolkits.length > 0) {
         // 清理现有的工具包关联（除了知识库工具包）
         await this.prismaService.agentToolkit.deleteMany({
-          where: { 
+          where: {
             agentId: persistentAgent.id,
             toolkitId: { not: 'knowledge-base-toolkit-01' }
           },
@@ -159,10 +164,12 @@ ${JSON.stringify(agent.output, null, 2)}
           }
 
           // 检查是否已存在（避免重复分配）
-          const existing = await this.prismaService.agentToolkit.findFirst({
+          const existing = await this.prismaService.agentToolkit.findUnique({
             where: {
-              agentId: persistentAgent.id,
-              toolkitId: toolkitId,
+              agentId_toolkitId: {
+                agentId: persistentAgent.id,
+                toolkitId: toolkitId,
+              },
             },
           });
 
@@ -246,7 +253,7 @@ ${JSON.stringify(agent.output, null, 2)}
 
 **此工作流必须严格按照以下数据结构设计：**
 `;
-      
+
       if (inputSchema) {
         schemaConstraints += `
 ### 输入数据结构（必须严格遵守）
@@ -254,7 +261,7 @@ ${JSON.stringify(agent.output, null, 2)}
 ${JSON.stringify(inputSchema, null, 2)}
 `;
       }
-      
+
       if (outputSchema) {
         schemaConstraints += `
 ### 输出数据结构（必须严格遵守）
@@ -262,7 +269,7 @@ ${JSON.stringify(inputSchema, null, 2)}
 ${JSON.stringify(outputSchema, null, 2)}
 `;
       }
-      
+
       schemaConstraints += `
 **关键约束：**
 - 生成的DSL中的events数组必须包含与指定schema完全匹配的数据结构
@@ -529,7 +536,7 @@ const classification = JSON.parse(resultString); // 如果需要结构化数据�
 
           // 验证DSL
           this.validateDsl(dsl);
-          
+
           // 如果有输入输出schema约束，额外验证数据结构
           if (inputSchema || outputSchema) {
             this.validateSchemaCompliance(dsl, inputSchema, outputSchema);
@@ -552,7 +559,7 @@ const classification = JSON.parse(resultString); // 如果需要结构化数据�
     return workflow;
   }
 
-  async createWorkflow(createWorkflowDto: CreateWorkflowDto) {
+  async createWorkflow(userId: string, organizationId: string | undefined, createWorkflowDto: CreateWorkflowDto) {
     // 验证 DSL 格式
     this.validateDsl(createWorkflowDto.dsl);
 
@@ -562,26 +569,40 @@ const classification = JSON.parse(resultString); // 如果需要结构化数据�
         name: createWorkflowDto.name,
         description: createWorkflowDto.description || '',
         DSL: createWorkflowDto.dsl,
+        createdById: userId,
+        organizationId: organizationId || 'default-org-id',
       },
     });
 
     return workflow;
   }
 
-  async getAllWorkflows() {
+  async getAllWorkflows(userId: string, organizationId: string | undefined) {
     return this.prismaService.workFlow.findMany({
-      where: { deleted: false },
+      where: {
+        deleted: false,
+        createdById: userId,
+        ...(organizationId && { organizationId }),
+      },
       orderBy: { createdAt: 'desc' },
     });
   }
 
-  async getAllWorkflowsPaginated(params: {
-    page: number;
-    pageSize: number;
-    skip: number;
-    search?: string;
-  }) {
-    const baseWhere = { deleted: false };
+  async getAllWorkflowsPaginated(
+    userId: string,
+    organizationId: string | undefined,
+    params: {
+      page: number;
+      pageSize: number;
+      skip: number;
+      search?: string;
+    }
+  ) {
+    const baseWhere = {
+      deleted: false,
+      createdById: userId,
+      ...(organizationId && { organizationId }),
+    };
 
     // 添加搜索条件
     const where = params.search
@@ -608,30 +629,35 @@ const classification = JSON.parse(resultString); // 如果需要结构化数据�
     return { data, total };
   }
 
-  async getWorkflow(id: string) {
+  async findOneWorkflow(userId: string, organizationId: string | undefined, workflowId: string) {
     const workflow = await this.prismaService.workFlow.findUnique({
-      where: { id, deleted: false },
+      where: {
+        id: workflowId,
+        deleted: false,
+        createdById: userId,
+        ...(organizationId && { organizationId }),
+      },
     });
 
     if (!workflow) {
-      throw new NotFoundException(`Workflow with id ${id} not found`);
+      throw new NotFoundException(`Workflow with id ${workflowId} not found`);
     }
 
     return workflow;
   }
 
-  async executeWorkflow(id: string, input: any, context: any = {}) {
+  async executeWorkflow(userId: string, organizationId: string | undefined, workflowId: string, input: any, context: any = {}) {
     // 获取工作流
-    const workflowRecord = await this.getWorkflow(id);
+    const workflowRecord = await this.findOneWorkflow(userId, organizationId, workflowId);
 
     // 从 DSL 创建工作流实例，传入工作流 ID 以支持智能体持久化
-    const workflow = await this.fromDsl(workflowRecord.DSL, id);
+    const workflow = await this.fromDsl(workflowRecord.DSL, workflowId);
 
     // 执行工作流
     const result = await workflow.execute(input);
 
     return {
-      workflowId: id,
+      workflowId: workflowId,
       input,
       output: result,
       executedAt: new Date().toISOString(),
@@ -682,15 +708,20 @@ const classification = JSON.parse(resultString); // 如果需要结构化数据�
   }
 
   // 更新工作流智能体并同步 DSL
-  async updateWorkflowAgent(workflowId: string, agentName: string, agentData: any) {
-    // 获取工作流智能体
-    const workflowAgent = await this.prismaService.workflowAgent.findFirst({
-      where: { workflowId, agentName },
+  async updateWorkflowAgent(workflowId: string, agentId: string, agentData: any) {
+    // 获取工作流智能体（使用 workflowId + agentId 查询）
+    const workflowAgent = await this.prismaService.workflowAgent.findUnique({
+      where: { 
+        workflowId_agentId: {
+          workflowId,
+          agentId 
+        }
+      },
       include: { agent: true },
     });
 
     if (!workflowAgent) {
-      throw new Error(`Workflow agent ${agentName} not found`);
+      throw new Error(`Workflow agent ${agentId} not found in workflow ${workflowId}`);
     }
 
     // 更新智能体
@@ -710,12 +741,12 @@ const classification = JSON.parse(resultString); // 如果需要结构化数据�
 
 
 
-  async deleteWorkflow(id: string) {
+  async deleteWorkflow(userId: string, organizationId: string | undefined, workflowId: string) {
     // 验证工作流存在
-    await this.getWorkflow(id);
+    await this.findOneWorkflow(userId, organizationId, workflowId);
 
     return this.prismaService.workFlow.update({
-      where: { id },
+      where: { id: workflowId },
       data: { deleted: true },
     });
   }

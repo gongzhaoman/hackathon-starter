@@ -203,19 +203,34 @@ export class ScheduledTaskService implements OnModuleInit {
       this.logger.log(`Executing scheduled task: ${task.name} (${taskId})`);
 
       // 创建对话并发送消息给智能体
-      const conversation = await this.conversationService.createConversation({
-        agentId: task.agentId,
-        title: `定时任务: ${task.name}`,
-      });
+      const conversation = await this.conversationService.createConversation(
+        task.agent.createdById,
+        task.agent.organizationId,
+        {
+          agentId: task.agentId,
+          title: `定时任务: ${task.name}`,
+        }
+      );
 
       // 发送模拟的用户消息给智能体
-      await this.conversationService.addMessage(conversation.id, {
-        role: 'USER',
-        content: task.triggerPrompt,
-      });
+      await this.conversationService.addMessage(
+        task.agent.createdById,
+        task.agent.organizationId,
+        conversation.id, 
+        {
+          role: 'USER',
+          content: task.triggerPrompt,
+        }
+      );
 
       // 智能体处理用户消息并调用工具生成响应
-      const response = await this.conversationService.processMessage(conversation.id, task.triggerPrompt);
+      // 对于定时任务，使用任务所属的智能体的创建者身份
+      await this.conversationService.processMessage(
+        task.agent.createdById, 
+        task.agent.organizationId, 
+        conversation.id, 
+        task.triggerPrompt
+      );
 
       // 更新执行记录
       await this.prisma.taskExecution.update({

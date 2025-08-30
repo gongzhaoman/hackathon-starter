@@ -184,10 +184,12 @@ export class KnowledgeBaseService {
     }
   }
 
-  async getAllKnowledgeBases(userId?: string) {
-    const whereClause = userId ? { createdById: userId } : {};
+  async getAllKnowledgeBases(userId: string, organizationId: string | undefined) {
     return this.prisma.knowledgeBase.findMany({
-      where: whereClause,
+      where: {
+        createdById: userId,
+        ...(organizationId && { organizationId }),
+      },
       include: {
         files: true,
       },
@@ -195,7 +197,8 @@ export class KnowledgeBaseService {
   }
 
   async getAllKnowledgeBasesPaginated(
-    userId?: string,
+    userId: string,
+    organizationId: string | undefined,
     params?: {
       page: number;
       pageSize: number;
@@ -203,7 +206,12 @@ export class KnowledgeBaseService {
       search?: string;
     }
   ) {
-    const baseWhere = userId ? { createdById: userId } : {};
+    const baseWhere = {
+      AND: [
+        { createdById: userId },
+        organizationId ? { organizationId } : {},
+      ],
+    };
 
     // 添加搜索条件
     const where = params?.search
@@ -218,6 +226,12 @@ export class KnowledgeBaseService {
 
     const include = {
       files: true,
+      createdBy: {
+        select: { id: true, email: true, name: true },
+      },
+      organization: {
+        select: { id: true, name: true, slug: true },
+      },
     };
 
     // 并行执行查询和计数
@@ -269,11 +283,17 @@ export class KnowledgeBaseService {
     });
   }
 
-  async getKnowledgeBase(userId: string | undefined, knowledgeBaseId: string) {
+  async getKnowledgeBase(userId: string, organizationId: string | undefined, knowledgeBaseId: string) {
     const knowledgeBase = await this.prisma.knowledgeBase.findUnique({
       where: { id: knowledgeBaseId },
       include: {
         files: true,
+        createdBy: {
+          select: { id: true, email: true, name: true },
+        },
+        organization: {
+          select: { id: true, name: true, slug: true },
+        },
       },
     });
 
@@ -281,8 +301,9 @@ export class KnowledgeBaseService {
       throw new NotFoundException(`Knowledge base with ID ${knowledgeBaseId} not found`);
     }
 
-    // 如果提供了 userId，检查权限
-    if (userId && knowledgeBase.createdById !== userId) {
+    // 检查权限：必须是创建者且在同一组织中
+    if (knowledgeBase.createdById !== userId || 
+        (organizationId && knowledgeBase.organizationId !== organizationId)) {
       throw new ForbiddenException(
         `You don't have permission to access this knowledge base`,
       );
@@ -293,6 +314,7 @@ export class KnowledgeBaseService {
 
   async updateKnowledgeBase(
     userId: string,
+    organizationId: string | undefined,
     knowledgeBaseId: string,
     updateKnowledgeBaseDto: UpdateKnowledgeBaseDto,
   ) {
@@ -300,7 +322,9 @@ export class KnowledgeBaseService {
       where: { id: knowledgeBaseId },
     });
 
-    if (!knowledgeBase || knowledgeBase.createdById !== userId) {
+    if (!knowledgeBase || 
+        knowledgeBase.createdById !== userId || 
+        (organizationId && knowledgeBase.organizationId !== organizationId)) {
       throw new ForbiddenException(
         `You don't have permission to update this knowledge base`,
       );
@@ -309,11 +333,29 @@ export class KnowledgeBaseService {
     return await this.prisma.knowledgeBase.update({
       where: { id: knowledgeBaseId },
       data: updateKnowledgeBaseDto,
+      include: {
+        createdBy: {
+          select: { id: true, email: true, name: true },
+        },
+        organization: {
+          select: { id: true, name: true, slug: true },
+        },
+      },
     });
   }
 
-  async createKnowledgeBase(userId: string | undefined, name: string, description: string, metadataSchema?: TypedMetadataSchema) {
-    const vectorStoreName = `kb_${userId || 'default'}_${name}`;
+  async createKnowledgeBase(
+    userId: string, 
+    organizationId: string | undefined, 
+    name: string, 
+    description: string, 
+    metadataSchema?: TypedMetadataSchema
+  ) {
+    if (!organizationId) {
+      throw new ForbiddenException('Organization is required to create knowledge base');
+    }
+    
+    const vectorStoreName = `kb_${organizationId}_${userId}_${name}`;
     const knowledgeBase = await this.prisma.knowledgeBase.create({
       data: {
         name,
@@ -321,6 +363,15 @@ export class KnowledgeBaseService {
         metadata: metadataSchema as any,
         vectorStoreName,
         createdById: userId,
+        organizationId,
+      },
+      include: {
+        createdBy: {
+          select: { id: true, email: true, name: true },
+        },
+        organization: {
+          select: { id: true, name: true, slug: true },
+        },
       },
     });
 
@@ -330,7 +381,8 @@ export class KnowledgeBaseService {
   }
 
   async deleteKnowledgeBase(
-    userId: string | undefined,
+    userId: string,
+    organizationId: string | undefined,
     knowledgeBaseId: string,
   ): Promise<void> {
     const knowledgeBase = await this.prisma.knowledgeBase.findUnique({
@@ -341,8 +393,9 @@ export class KnowledgeBaseService {
       throw new NotFoundException(`Knowledge base with ID ${knowledgeBaseId} not found`);
     }
 
-    // 权限检查：如果提供了userId，则检查权限；如果知识库有createdById且与userId不匹配，则拒绝
-    if (userId && knowledgeBase.createdById && knowledgeBase.createdById !== userId) {
+    // 严格权限检查：必须是创建者且在同一组织中
+    if (knowledgeBase.createdById !== userId || 
+        (organizationId && knowledgeBase.organizationId !== organizationId)) {
       throw new ForbiddenException(
         `You don't have permission to delete this knowledge base`,
       );
@@ -368,10 +421,11 @@ export class KnowledgeBaseService {
 
   async uploadFile(
     userId: string,
+    organizationId: string | undefined,
     knowledgeBaseId: string,
     file: any,
   ): Promise<FileResponseDto> {
-    const knowledgeBase = await this.getKnowledgeBase(userId, knowledgeBaseId);
+    const knowledgeBase = await this.getKnowledgeBase(userId, organizationId, knowledgeBaseId);
 
     const fileName = Buffer.from(file.originalname, 'latin1').toString('utf8');
 
@@ -400,9 +454,10 @@ export class KnowledgeBaseService {
 
   async getFiles(
     userId: string,
+    organizationId: string | undefined,
     knowledgeBaseId: string,
   ): Promise<FileResponseDto[]> {
-    await this.getKnowledgeBase(userId, knowledgeBaseId);
+    await this.getKnowledgeBase(userId, organizationId, knowledgeBaseId);
     return this.prisma.file.findMany({
       where: { knowledgeBaseId },
     });
@@ -410,10 +465,11 @@ export class KnowledgeBaseService {
 
   async getFileStatus(
     userId: string,
+    organizationId: string | undefined,
     knowledgeBaseId: string,
     fileId: string,
   ): Promise<FileResponseDto> {
-    await this.getKnowledgeBase(userId, knowledgeBaseId);
+    await this.getKnowledgeBase(userId, organizationId, knowledgeBaseId);
     const file = await this.prisma.file.findUnique({
       where: { id: fileId },
     });
@@ -427,10 +483,11 @@ export class KnowledgeBaseService {
 
   async trainFile(
     userId: string,
+    organizationId: string | undefined,
     knowledgeBaseId: string,
     fileId: string,
   ): Promise<FileResponseDto> {
-    const knowledgeBase = await this.getKnowledgeBase(userId, knowledgeBaseId);
+    const knowledgeBase = await this.getKnowledgeBase(userId, organizationId, knowledgeBaseId);
     const file = await this.prisma.file.findUnique({
       where: { id: fileId },
     });
@@ -480,6 +537,7 @@ export class KnowledgeBaseService {
 
   async deleteFile(
     userId: string,
+    organizationId: string | undefined,
     knowledgeBaseId: string,
     fileId: string,
   ): Promise<void> {
@@ -487,6 +545,7 @@ export class KnowledgeBaseService {
       // 1. 验证权限和获取必要数据
       const knowledgeBase = await this.getKnowledgeBase(
         userId,
+        organizationId,
         knowledgeBaseId,
       );
 
@@ -681,15 +740,17 @@ export class KnowledgeBaseService {
 
   async linkKnowledgeBaseToAgent(
     userId: string,
+    organizationId: string | undefined,
     knowledgeBaseId: string,
     agentId: string,
   ): Promise<{ success: boolean; message: string }> {
-    const knowledgeBase = await this.getKnowledgeBase(userId, knowledgeBaseId);
+    const knowledgeBase = await this.getKnowledgeBase(userId, organizationId, knowledgeBaseId);
     const agent = await this.prisma.agent.findUnique({
       where: { id: agentId },
     });
 
-    if (!agent || agent.createdById !== userId) {
+    if (!agent || agent.createdById !== userId || 
+        (organizationId && agent.organizationId !== organizationId)) {
       throw new ForbiddenException(
         `You don't have permission to link this agent`,
       );
@@ -724,15 +785,17 @@ export class KnowledgeBaseService {
 
   async unlinkKnowledgeBaseFromAgent(
     userId: string,
+    organizationId: string | undefined,
     knowledgeBaseId: string,
     agentId: string,
   ): Promise<{ success: boolean; message: string }> {
-    const knowledgeBase = await this.getKnowledgeBase(userId, knowledgeBaseId);
+    const knowledgeBase = await this.getKnowledgeBase(userId, organizationId, knowledgeBaseId);
     const agent = await this.prisma.agent.findUnique({
       where: { id: agentId },
     });
 
-    if (!agent || agent.createdById !== userId) {
+    if (!agent || agent.createdById !== userId || 
+        (organizationId && agent.organizationId !== organizationId)) {
       throw new ForbiddenException(
         `You don't have permission to unlink this agent`,
       );

@@ -126,6 +126,7 @@ describe('ToolkitsService', () => {
       prismaService.toolkit.findUnique.mockResolvedValue(null);
       prismaService.toolkit.upsert.mockResolvedValue(mockToolkit);
       prismaService.tool.upsert.mockResolvedValue(mockTool);
+      prismaService.tool.findMany.mockResolvedValue([]);
       prismaService.toolkit.findMany.mockResolvedValue([]);
 
       await service.onModuleInit();
@@ -248,7 +249,10 @@ describe('ToolkitsService', () => {
       const result = await service.getAllToolkits();
 
       expect(prismaService.toolkit.findMany).toHaveBeenCalledWith({
-        where: { deleted: false },
+        where: { 
+          deleted: false,
+          type: 'BUSINESS'
+        },
         include: {
           tools: {
             select: {

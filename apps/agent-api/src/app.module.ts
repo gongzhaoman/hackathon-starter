@@ -10,12 +10,14 @@ import { ScheduledTaskModule } from './scheduled-task/scheduled-task.module';
 import { ConversationModule } from './conversation/conversation.module';
 import { ConfigModule } from '@nestjs/config';
 import { HealthModule } from './health/health.module';
+import { AuthModule } from './auth/auth.module';
 
 @Module({
   imports: [
     ConfigModule.forRoot({
       isGlobal: true,
     }),
+    AuthModule,
     PrismaModule,
     ToolsModule,
     WorkflowModule,

@@ -2,10 +2,18 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { NotFoundException, ForbiddenException } from '@nestjs/common';
 import { KnowledgeBaseController } from './knowledge-base.controller';
 import { KnowledgeBaseService } from './knowledge-base.service';
+import { CurrentUserData } from '../auth/current-user.decorator';
 
 describe('KnowledgeBaseController', () => {
   let controller: KnowledgeBaseController;
   let knowledgeBaseService: KnowledgeBaseService;
+  
+  const mockUser: CurrentUserData = {
+    id: 'test-user-id',
+    email: 'test@example.com',
+    name: 'Test User',
+    organizationId: 'test-org-id',
+  };
 
   beforeEach(async () => {
     const mockKnowledgeBaseService = {
@@ -58,13 +66,13 @@ describe('KnowledgeBaseController', () => {
 
       (knowledgeBaseService.getAllKnowledgeBases as jest.Mock).mockResolvedValue(mockKnowledgeBases);
 
-      const result = await controller.getAllKnowledgeBases('user-1');
+      const result = await controller.getAllKnowledgeBases(mockUser);
 
-      expect(knowledgeBaseService.getAllKnowledgeBases).toHaveBeenCalledWith('user-1');
+      expect(knowledgeBaseService.getAllKnowledgeBases).toHaveBeenCalledWith(mockUser.id, mockUser.organizationId);
       expect(result.data).toEqual(mockKnowledgeBases);
     });
 
-    it('should return all knowledge bases when no userId provided', async () => {
+    it('should return all knowledge bases when no user provided', async () => {
       const mockKnowledgeBases = [
         {
           id: 'kb-1',
@@ -75,9 +83,15 @@ describe('KnowledgeBaseController', () => {
 
       (knowledgeBaseService.getAllKnowledgeBases as jest.Mock).mockResolvedValue(mockKnowledgeBases);
 
-      const result = await controller.getAllKnowledgeBases();
+      // Mock a basic user for this test case
+      const mockEmptyUser: any = {
+        id: undefined,
+        organizationId: undefined
+      };
 
-      expect(knowledgeBaseService.getAllKnowledgeBases).toHaveBeenCalledWith(undefined);
+      const result = await controller.getAllKnowledgeBases(mockEmptyUser);
+
+      expect(knowledgeBaseService.getAllKnowledgeBases).toHaveBeenCalledWith(undefined, undefined);
       expect(result.data).toEqual(mockKnowledgeBases);
     });
   });
@@ -97,9 +111,9 @@ describe('KnowledgeBaseController', () => {
 
       (knowledgeBaseService.getKnowledgeBase as jest.Mock).mockResolvedValue(mockKnowledgeBase);
 
-      const result = await controller.getKnowledgeBase('kb-1', 'user-1');
+      const result = await controller.getKnowledgeBase('kb-1', mockUser);
 
-      expect(knowledgeBaseService.getKnowledgeBase).toHaveBeenCalledWith('user-1', 'kb-1');
+      expect(knowledgeBaseService.getKnowledgeBase).toHaveBeenCalledWith(mockUser.id, mockUser.organizationId, 'kb-1');
       expect(result.data).toEqual(mockKnowledgeBase);
     });
 
@@ -108,7 +122,7 @@ describe('KnowledgeBaseController', () => {
         new NotFoundException('Knowledge base not found')
       );
 
-      await expect(controller.getKnowledgeBase('non-existent', 'user-1')).rejects.toThrow(
+      await expect(controller.getKnowledgeBase('non-existent', mockUser)).rejects.toThrow(
         new NotFoundException('Knowledge base not found')
       );
     });
@@ -133,9 +147,9 @@ describe('KnowledgeBaseController', () => {
 
       (knowledgeBaseService.createKnowledgeBase as jest.Mock).mockResolvedValue(mockCreatedKnowledgeBase);
 
-      const result = await controller.createKnowledgeBase(createDto, 'user-1');
+      const result = await controller.createKnowledgeBase(createDto, mockUser);
 
-      expect(knowledgeBaseService.createKnowledgeBase).toHaveBeenCalledWith('user-1', createDto.name, createDto.description, undefined);
+      expect(knowledgeBaseService.createKnowledgeBase).toHaveBeenCalledWith(mockUser.id, mockUser.organizationId, createDto.name, createDto.description, undefined);
       expect(result.data).toEqual(mockCreatedKnowledgeBase);
     });
   });
@@ -160,9 +174,9 @@ describe('KnowledgeBaseController', () => {
 
       (knowledgeBaseService.updateKnowledgeBase as jest.Mock).mockResolvedValue(mockUpdatedKnowledgeBase);
 
-      const result = await controller.updateKnowledgeBase('kb-1', updateDto, 'user-1');
+      const result = await controller.updateKnowledgeBase('kb-1', updateDto, mockUser);
 
-      expect(knowledgeBaseService.updateKnowledgeBase).toHaveBeenCalledWith('user-1', 'kb-1', updateDto);
+      expect(knowledgeBaseService.updateKnowledgeBase).toHaveBeenCalledWith(mockUser.id, mockUser.organizationId, 'kb-1', updateDto);
       expect(result.data).toEqual(mockUpdatedKnowledgeBase);
     });
 
@@ -175,7 +189,8 @@ describe('KnowledgeBaseController', () => {
         new ForbiddenException('You do not have permission to update this knowledge base')
       );
 
-      await expect(controller.updateKnowledgeBase('kb-1', updateDto, 'other-user')).rejects.toThrow(
+      const otherUser: CurrentUserData = { ...mockUser, id: 'other-user' };
+      await expect(controller.updateKnowledgeBase('kb-1', updateDto, otherUser)).rejects.toThrow(
         new ForbiddenException('You do not have permission to update this knowledge base')
       );
     });
@@ -183,17 +198,12 @@ describe('KnowledgeBaseController', () => {
 
   describe('deleteKnowledgeBase', () => {
     it('should delete a knowledge base', async () => {
-      const mockDeletedKnowledgeBase = {
-        id: 'kb-1',
-        name: 'Test Knowledge Base',
-        deleted: true,
-      };
 
       (knowledgeBaseService.deleteKnowledgeBase as jest.Mock).mockResolvedValue(undefined);
 
-      const result = await controller.deleteKnowledgeBase('kb-1', 'user-1');
+      const result = await controller.deleteKnowledgeBase('kb-1', mockUser);
 
-      expect(knowledgeBaseService.deleteKnowledgeBase).toHaveBeenCalledWith('user-1', 'kb-1');
+      expect(knowledgeBaseService.deleteKnowledgeBase).toHaveBeenCalledWith(mockUser.id, mockUser.organizationId, 'kb-1');
       expect(result.success).toBe(true);
       expect(result.result.operation).toBe('delete');
     });
@@ -203,7 +213,8 @@ describe('KnowledgeBaseController', () => {
         new ForbiddenException('You do not have permission to delete this knowledge base')
       );
 
-      await expect(controller.deleteKnowledgeBase('kb-1', 'other-user')).rejects.toThrow(
+      const otherUser: CurrentUserData = { ...mockUser, id: 'other-user' };
+      await expect(controller.deleteKnowledgeBase('kb-1', otherUser)).rejects.toThrow(
         new ForbiddenException('You do not have permission to delete this knowledge base')
       );
     });
@@ -228,9 +239,9 @@ describe('KnowledgeBaseController', () => {
 
       (knowledgeBaseService.uploadFile as jest.Mock).mockResolvedValue(mockUploadResult);
 
-      const result = await controller.uploadFile('kb-1', mockFile, 'user-1');
+      const result = await controller.uploadFile('kb-1', mockFile, mockUser);
 
-      expect(knowledgeBaseService.uploadFile).toHaveBeenCalledWith('user-1', 'kb-1', mockFile);
+      expect(knowledgeBaseService.uploadFile).toHaveBeenCalledWith(mockUser.id, mockUser.organizationId, 'kb-1', mockFile);
       expect(result.data).toEqual(mockUploadResult);
     });
   });
@@ -251,9 +262,9 @@ describe('KnowledgeBaseController', () => {
 
       (knowledgeBaseService.getFiles as jest.Mock).mockResolvedValue(mockFiles);
 
-      const result = await controller.getFiles('kb-1', 'user-1');
+      const result = await controller.getFiles('kb-1', mockUser);
 
-      expect(knowledgeBaseService.getFiles).toHaveBeenCalledWith('user-1', 'kb-1');
+      expect(knowledgeBaseService.getFiles).toHaveBeenCalledWith(mockUser.id, mockUser.organizationId, 'kb-1');
       expect(result.data).toEqual(mockFiles);
     });
   });
@@ -269,9 +280,9 @@ describe('KnowledgeBaseController', () => {
 
       (knowledgeBaseService.getFileStatus as jest.Mock).mockResolvedValue(mockFile);
 
-      const result = await controller.getFileStatus('kb-1', 'file-1', 'user-1');
+      const result = await controller.getFileStatus('kb-1', 'file-1', mockUser);
 
-      expect(knowledgeBaseService.getFileStatus).toHaveBeenCalledWith('user-1', 'kb-1', 'file-1');
+      expect(knowledgeBaseService.getFileStatus).toHaveBeenCalledWith(mockUser.id, mockUser.organizationId, 'kb-1', 'file-1');
       expect(result.data).toEqual(mockFile);
     });
 
@@ -280,7 +291,7 @@ describe('KnowledgeBaseController', () => {
         new NotFoundException('File not found')
       );
 
-      await expect(controller.getFileStatus('kb-1', 'non-existent', 'user-1')).rejects.toThrow(
+      await expect(controller.getFileStatus('kb-1', 'non-existent', mockUser)).rejects.toThrow(
         new NotFoundException('File not found')
       );
     });
@@ -297,9 +308,9 @@ describe('KnowledgeBaseController', () => {
 
       (knowledgeBaseService.trainFile as jest.Mock).mockResolvedValue(mockTrainResult);
 
-      const result = await controller.trainFile('kb-1', 'file-1', 'user-1');
+      const result = await controller.trainFile('kb-1', 'file-1', mockUser);
 
-      expect(knowledgeBaseService.trainFile).toHaveBeenCalledWith('user-1', 'kb-1', 'file-1');
+      expect(knowledgeBaseService.trainFile).toHaveBeenCalledWith(mockUser.id, mockUser.organizationId, 'kb-1', 'file-1');
       expect(result.data).toEqual(mockTrainResult);
     });
   });
@@ -312,9 +323,9 @@ describe('KnowledgeBaseController', () => {
       };
       (knowledgeBaseService.linkKnowledgeBaseToAgent as jest.Mock).mockResolvedValue(linkResult);
 
-      const result = await controller.linkToAgent('kb-1', { agentId: 'agent-1' }, 'user-1');
+      const result = await controller.linkToAgent('kb-1', { agentId: 'agent-1' }, mockUser);
 
-      expect(knowledgeBaseService.linkKnowledgeBaseToAgent).toHaveBeenCalledWith('user-1', 'kb-1', 'agent-1');
+      expect(knowledgeBaseService.linkKnowledgeBaseToAgent).toHaveBeenCalledWith(mockUser.id, mockUser.organizationId, 'kb-1', 'agent-1');
       expect(result.data).toEqual(linkResult);
     });
 
@@ -325,7 +336,7 @@ describe('KnowledgeBaseController', () => {
       };
       (knowledgeBaseService.linkKnowledgeBaseToAgent as jest.Mock).mockResolvedValue(linkResult);
 
-      const result = await controller.linkToAgent('kb-1', { agentId: 'agent-1' }, 'user-1');
+      const result = await controller.linkToAgent('kb-1', { agentId: 'agent-1' }, mockUser);
 
       expect(result.data).toEqual(linkResult);
     });
@@ -339,9 +350,9 @@ describe('KnowledgeBaseController', () => {
       };
       (knowledgeBaseService.unlinkKnowledgeBaseFromAgent as jest.Mock).mockResolvedValue(unlinkResult);
 
-      const result = await controller.unlinkFromAgent('kb-1', 'agent-1', 'user-1');
+      const result = await controller.unlinkFromAgent('kb-1', 'agent-1', mockUser);
 
-      expect(knowledgeBaseService.unlinkKnowledgeBaseFromAgent).toHaveBeenCalledWith('user-1', 'kb-1', 'agent-1');
+      expect(knowledgeBaseService.unlinkKnowledgeBaseFromAgent).toHaveBeenCalledWith(mockUser.id, mockUser.organizationId, 'kb-1', 'agent-1');
       expect(result.success).toBe(true);
       expect(result.result.operation).toBe('delete');
     });

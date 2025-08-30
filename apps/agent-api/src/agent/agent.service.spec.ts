@@ -54,6 +54,7 @@ describe('AgentService', () => {
           prompt: 'You are a test agent',
           options: { temperature: 0.7 },
           createdById: 'test-user',
+          organizationId: 'org-1',
           deleted: false,
           isWorkflowGenerated: false,
           createdAt: new Date(),
@@ -66,12 +67,14 @@ describe('AgentService', () => {
 
       (prismaService.agent.findMany as jest.Mock).mockResolvedValue(mockAgents);
 
-      const result = await service.findAll();
+      const result = await service.findAll('test-user', 'org-1');
 
       expect(prismaService.agent.findMany).toHaveBeenCalledWith({
         where: {
           deleted: false,
           isWorkflowGenerated: false,
+          createdById: 'test-user',
+          organizationId: 'org-1'
         },
         include: expect.any(Object),
       });
@@ -79,7 +82,7 @@ describe('AgentService', () => {
     });
   });
 
-  describe('findOne', () => {
+  describe('findOneAgent', () => {
     it('should return an agent by id', async () => {
       const mockAgent = {
         id: 'agent-1',
@@ -99,10 +102,15 @@ describe('AgentService', () => {
 
       (prismaService.agent.findUnique as jest.Mock).mockResolvedValue(mockAgent);
 
-      const result = await service.findOne('agent-1');
+      const result = await service.findOneAgent('test-user', 'org-1', 'agent-1');
 
       expect(prismaService.agent.findUnique).toHaveBeenCalledWith({
-        where: { id: 'agent-1', deleted: false },
+        where: { 
+          id: 'agent-1', 
+          deleted: false,
+          createdById: 'test-user',
+          organizationId: 'org-1'
+        },
         include: expect.any(Object),
       });
       expect(result).toEqual(mockAgent);
@@ -111,25 +119,26 @@ describe('AgentService', () => {
     it('should throw NotFoundException when agent is not found', async () => {
       (prismaService.agent.findUnique as jest.Mock).mockResolvedValue(null);
 
-      await expect(service.findOne('non-existent')).rejects.toThrow(
+      await expect(service.findOneAgent('test-user', 'org-1', 'non-existent')).rejects.toThrow(
         new NotFoundException('Agent with ID non-existent not found')
       );
     });
   });
 
-  describe('create', () => {
+  describe('createAgent', () => {
     it('should create an agent', async () => {
       const createAgentDto = {
         name: 'New Agent',
         description: 'New Description',
         prompt: 'You are a new agent',
-        options: { temperature: 0.8 },
-        createdById: 'user-1'
+        options: { temperature: 0.8 }
       };
 
       const mockCreatedAgent = {
         id: 'new-agent-id',
         ...createAgentDto,
+        createdById: 'user-1',
+        organizationId: 'org-1',
         deleted: false,
         isWorkflowGenerated: false,
         createdAt: new Date(),
@@ -141,7 +150,7 @@ describe('AgentService', () => {
 
       (prismaService.agent.create as jest.Mock).mockResolvedValue(mockCreatedAgent);
 
-      const result = await service.create(createAgentDto);
+      const result = await service.createAgent('user-1', 'org-1', createAgentDto);
 
       expect(prismaService.agent.create).toHaveBeenCalledWith({
         data: {
@@ -149,13 +158,15 @@ describe('AgentService', () => {
           description: createAgentDto.description,
           prompt: createAgentDto.prompt,
           options: createAgentDto.options,
+          createdById: 'user-1',
+          organizationId: 'org-1'
         },
       });
       expect(result).toEqual(mockCreatedAgent);
     });
   });
 
-  describe('update', () => {
+  describe('updateAgent', () => {
     it('should update an agent', async () => {
       const updateAgentDto = {
         name: 'Updated Agent',
@@ -169,6 +180,7 @@ describe('AgentService', () => {
         prompt: 'You are a test agent',
         options: { temperature: 0.7 },
         createdById: 'test-user',
+        organizationId: 'org-1',
         deleted: false,
         isWorkflowGenerated: false,
         createdAt: new Date(),
@@ -181,7 +193,7 @@ describe('AgentService', () => {
       (prismaService.agent.findUnique as jest.Mock).mockResolvedValue(mockUpdatedAgent);
       (prismaService.agent.update as jest.Mock).mockResolvedValue(mockUpdatedAgent);
 
-      const result = await service.update('agent-1', updateAgentDto);
+      const result = await service.updateAgent('test-user', 'org-1', 'agent-1', updateAgentDto);
 
       expect(prismaService.agent.update).toHaveBeenCalledWith({
         where: { id: 'agent-1' },
@@ -197,18 +209,20 @@ describe('AgentService', () => {
     it('should throw NotFoundException when agent is not found', async () => {
       (prismaService.agent.findUnique as jest.Mock).mockResolvedValue(null);
 
-      await expect(service.update('non-existent', {})).rejects.toThrow(
+      await expect(service.updateAgent('test-user', 'org-1', 'non-existent', {})).rejects.toThrow(
         new NotFoundException('Agent with ID non-existent not found')
       );
     });
   });
 
-  describe('remove', () => {
+  describe('removeAgent', () => {
     it('should soft delete an agent', async () => {
       const mockAgent = {
         id: 'agent-1',
         name: 'Test Agent',
         deleted: false,
+        createdById: 'test-user',
+        organizationId: 'org-1'
       };
 
       const mockDeletedAgent = { ...mockAgent, deleted: true };
@@ -216,7 +230,7 @@ describe('AgentService', () => {
       (prismaService.agent.findUnique as jest.Mock).mockResolvedValue(mockAgent);
       (prismaService.agent.update as jest.Mock).mockResolvedValue(mockDeletedAgent);
 
-      const result = await service.remove('agent-1');
+      const result = await service.removeAgent('test-user', 'org-1', 'agent-1');
 
       expect(prismaService.agent.update).toHaveBeenCalledWith({
         where: { id: 'agent-1' },
@@ -228,7 +242,7 @@ describe('AgentService', () => {
     it('should throw NotFoundException when agent is not found', async () => {
       (prismaService.agent.findUnique as jest.Mock).mockResolvedValue(null);
 
-      await expect(service.remove('non-existent')).rejects.toThrow(
+      await expect(service.removeAgent('test-user', 'org-1', 'non-existent')).rejects.toThrow(
         new NotFoundException('Agent with ID non-existent not found')
       );
     });
@@ -246,6 +260,8 @@ describe('AgentService', () => {
         name: 'Test Agent',
         prompt: 'You are a test agent',
         options: { temperature: 0.7 },
+        createdById: 'test-user',
+        organizationId: 'org-1'
       };
 
       const mockTools = [{ name: 'tool1' }];
@@ -259,7 +275,7 @@ describe('AgentService', () => {
       (toolsService.getAgentTools as jest.Mock).mockResolvedValue(mockTools);
       (llamaindexService.createAgent as jest.Mock).mockResolvedValue(mockAgentInstance);
 
-      const result = await service.chatWithAgent('agent-1', chatDto);
+      const result = await service.chatWithAgent('test-user', 'org-1', 'agent-1', chatDto);
 
       expect(toolsService.getAgentTools).toHaveBeenCalledWith('agent-1');
       expect(llamaindexService.createAgent).toHaveBeenCalledWith(
@@ -279,7 +295,7 @@ describe('AgentService', () => {
     it('should throw NotFoundException when agent is not found', async () => {
       (prismaService.agent.findUnique as jest.Mock).mockResolvedValue(null);
 
-      await expect(service.chatWithAgent('non-existent', { message: 'Hello' })).rejects.toThrow(
+      await expect(service.chatWithAgent('test-user', 'org-1', 'non-existent', { message: 'Hello' })).rejects.toThrow(
         new NotFoundException('Agent with ID non-existent not found')
       );
     });
@@ -306,6 +322,7 @@ describe('AgentService', () => {
         prompt: 'You are a test agent',
         options: {},
         createdById: 'test-user',
+        organizationId: 'org-1',
         deleted: false,
         isWorkflowGenerated: false,
         createdAt: new Date(),
@@ -321,7 +338,7 @@ describe('AgentService', () => {
       (prismaService.toolkit.findUnique as jest.Mock).mockResolvedValue(mockToolkit);
       (prismaService.agentToolkit.create as jest.Mock).mockResolvedValue({});
 
-      await service.create(createAgentDto);
+      await service.createAgent('test-user', 'org-1', createAgentDto);
 
       // 验证 agentToolkit.create 被调用时，settings 中自动包含了 agentId
       expect(prismaService.agentToolkit.create).toHaveBeenCalledWith({
@@ -356,6 +373,7 @@ describe('AgentService', () => {
         prompt: 'You are a test agent',
         options: {},
         createdById: 'test-user',
+        organizationId: 'org-1',
         deleted: false,
         isWorkflowGenerated: false,
         createdAt: new Date(),
@@ -371,7 +389,7 @@ describe('AgentService', () => {
       (prismaService.toolkit.findUnique as jest.Mock).mockResolvedValue(mockToolkit);
       (prismaService.agentToolkit.create as jest.Mock).mockResolvedValue({});
 
-      await service.create(createAgentDto);
+      await service.createAgent('test-user', 'org-1', createAgentDto);
 
       // 验证即使没有提供自定义设置，agentId 也会被自动添加
       expect(prismaService.agentToolkit.create).toHaveBeenCalledWith({
@@ -400,6 +418,7 @@ describe('AgentService', () => {
         prompt: 'You are a test agent',
         options: {},
         createdById: 'test-user',
+        organizationId: 'org-1',
         deleted: false,
         isWorkflowGenerated: false,
         createdAt: new Date(),
@@ -415,7 +434,7 @@ describe('AgentService', () => {
       (prismaService.toolkit.findUnique as jest.Mock).mockResolvedValue(mockCommonToolkit);
       (prismaService.agentToolkit.create as jest.Mock).mockResolvedValue({});
 
-      await service.create(createAgentDto);
+      await service.createAgent('test-user', 'org-1', createAgentDto);
 
       // 验证 common toolkit 被自动添加，且包含 agentId
       expect(prismaService.agentToolkit.create).toHaveBeenCalledWith({

@@ -7,6 +7,107 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+// Better Auth Models
+model User {
+  id        String   @id
+  email     String   @unique
+  name      String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Multi-tenant relationships
+  memberships      OrganizationMember[]
+  activeOrgId      String?
+  activeOrg        Organization?        @relation("ActiveOrganization", fields: [activeOrgId], references: [id])
+  
+  // User created resources
+  createdAgents         Agent[]
+  createdKnowledgeBases KnowledgeBase[]
+  createdWorkflows      WorkFlow[]
+  
+  sessions Session[]
+  accounts Account[]
+
+  @@map("users")
+}
+
+model Session {
+  id        String   @id
+  userId    String
+  expiresAt DateTime
+  token     String   @unique
+  ipAddress String?
+  userAgent String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("sessions")
+}
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  accountId         String
+  providerId        String
+  accessToken       String?
+  refreshToken      String?
+  idToken           String?
+  accessTokenExpiresAt DateTime?
+  refreshTokenExpiresAt DateTime?
+  scope             String?
+  password          String?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([providerId, accountId])
+  @@map("accounts")
+}
+
+model Organization {
+  id          String   @id @default(cuid())
+  name        String
+  slug        String   @unique
+  logo        String?
+  metadata    Json?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Relationships
+  members                  OrganizationMember[]
+  activeUsers              User[]               @relation("ActiveOrganization")
+  
+  // Organization owned resources
+  agents                   Agent[]
+  knowledgeBases          KnowledgeBase[]
+  workflows               WorkFlow[]
+  toolkits                Toolkit[]
+
+  @@map("organizations")
+}
+
+model OrganizationMember {
+  id     String   @id @default(cuid())
+  userId String
+  orgId  String
+  role   OrgRole  @default(MEMBER)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  organization Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, orgId])
+  @@map("organization_members")
+}
+
+enum OrgRole {
+  OWNER
+  ADMIN
+  MEMBER
+}
+
 model Agent {
   id                   String                 @id @default(cuid())
   name                 String
@@ -19,12 +120,21 @@ model Agent {
   workflowAgents       WorkflowAgent[]
   scheduledTasks       ScheduledTask[]
   conversations        Conversation[]
-  createdById          String?
+  
+  // Multi-tenant fields (now required)
+  createdById          String
+  organizationId       String
   isWorkflowGenerated  Boolean                @default(false)
+  
   createdAt            DateTime               @default(now())
   updatedAt            DateTime               @updatedAt
   deleted              Boolean                @default(false)
 
+  // Relationships
+  createdBy            User                   @relation(fields: [createdById], references: [id])
+  organization         Organization           @relation(fields: [organizationId], references: [id])
+
+  @@index([createdById, organizationId])
   @@map("agents")
 }
 
@@ -34,11 +144,18 @@ model Toolkit {
   description   String
   settings      Json
   type          ToolkitType  @default(BUSINESS)
+  
+  // Multi-tenant fields
+  organizationId String?      // System toolkits can be null
+  
   agentToolkits AgentToolkit[]
   tools         Tool[]
   createdAt     DateTime      @default(now()) @map("created_at")
   updatedAt     DateTime      @default(now()) @map("updated_at")
   deleted       Boolean       @default(false)
+
+  // Relationships
+  organization  Organization? @relation(fields: [organizationId], references: [id])
 
   @@map("toolkits")
 }
@@ -80,6 +197,7 @@ model AgentTool {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
+  @@index([agentId])
   @@map("agent_tools")
 }
 
@@ -88,6 +206,11 @@ model WorkFlow {
   name      String
   description String?
   DSL       Json
+  
+  // Multi-tenant fields (now required)
+  createdById    String
+  organizationId String
+  
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
   deleted     Boolean  @default(false)
@@ -95,6 +218,11 @@ model WorkFlow {
   // 工作流关联的智能体
   workflowAgents WorkflowAgent[]
 
+  // Relationships
+  createdBy      User         @relation(fields: [createdById], references: [id])
+  organization   Organization @relation(fields: [organizationId], references: [id])
+
+  @@index([createdById, organizationId])
   @@map("workflows")
 }
 
@@ -110,6 +238,7 @@ model WorkflowAgent {
   agent      Agent    @relation(fields: [agentId], references: [id], onDelete: Cascade)
 
   @@unique([workflowId, agentName])
+  @@unique([workflowId, agentId])
   @@map("workflow_agents")
 }
 
@@ -119,12 +248,21 @@ model KnowledgeBase {
   description          String?
   metadata             Json?
   vectorStoreName      String                 @unique
-  createdById          String?
+  
+  // Multi-tenant fields (now required)
+  createdById          String
+  organizationId       String
+  
   agentKnowledgeBases  AgentKnowledgeBase[]
   files                File[]
   createdAt            DateTime               @default(now())
   updatedAt            DateTime               @updatedAt
 
+  // Relationships
+  createdBy            User                   @relation(fields: [createdById], references: [id])
+  organization         Organization           @relation(fields: [organizationId], references: [id])
+
+  @@index([createdById, organizationId])
   @@map("knowledge_bases")
 }
 
@@ -151,6 +289,7 @@ model File {
   createdAt       DateTime      @default(now())
   updatedAt       DateTime      @updatedAt
 
+  @@index([knowledgeBaseId])
   @@map("files")
 }
 
@@ -183,6 +322,7 @@ model ScheduledTask {
   agent          Agent           @relation(fields: [agentId], references: [id], onDelete: Cascade)
   executions     TaskExecution[]
 
+  @@index([agentId])
   @@map("scheduled_tasks")
 }
 
@@ -212,6 +352,7 @@ model Conversation {
   messages       Message[]
   taskExecutions TaskExecution[]
 
+  @@index([agentId])
   @@map("conversations")
 }
 
@@ -225,6 +366,7 @@ model Message {
 
   conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
 
+  @@index([conversationId])
   @@map("messages")
 }
 

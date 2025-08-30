@@ -30,5 +30,5 @@ export class ConversationQueryDto {
 
   @IsOptional()
   @IsNumber()
-  limit?: number = 20;
+  limit?: number = 6;
 }

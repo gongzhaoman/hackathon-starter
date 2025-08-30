@@ -1,4 +1,4 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { MessageRole } from '@prisma/client';
 import { AgentService } from '../agent/agent.service';
@@ -12,7 +12,7 @@ export class ConversationService {
     private readonly agentService: AgentService,
   ) {}
 
-  async createConversation(data: {
+  async createConversation(userId: string, organizationId: string | undefined, data: {
     agentId: string;
     title?: string;
   }) {
@@ -30,9 +30,15 @@ export class ConversationService {
     });
   }
 
-  async getConversation(id: string) {
+  async getConversation(userId: string, organizationId: string | undefined, conversationId: string) {
     return this.prisma.conversation.findUnique({
-      where: { id },
+      where: {
+        id: conversationId,
+        agent: {
+          createdById: userId,
+          ...(organizationId && { organizationId }),
+        },
+      },
       include: {
         agent: true,
         messages: {
@@ -42,9 +48,15 @@ export class ConversationService {
     });
   }
 
-  async getConversationsByAgent(agentId: string, limit = 20) {
+  async getConversationsByAgent(userId: string, organizationId: string | undefined, agentId: string, limit = 20) {
     return this.prisma.conversation.findMany({
-      where: { agentId },
+      where: {
+        agentId,
+        agent: {
+          createdById: userId,
+          ...(organizationId && { organizationId }),
+        },
+      },
       include: {
         messages: {
           orderBy: { createdAt: 'desc' },
@@ -59,11 +71,21 @@ export class ConversationService {
     });
   }
 
-  async addMessage(conversationId: string, data: {
-    role: MessageRole;
-    content: string;
-    metadata?: any;
-  }) {
+  async addMessage(
+    userId: string,
+    organizationId: string | undefined,
+    conversationId: string,
+    data: {
+      role: MessageRole;
+      content: string;
+      metadata?: any;
+    }
+  ) {
+    // 验证用户权限
+    const conversation = await this.getConversation(userId, organizationId, conversationId);
+    if (!conversation) {
+      throw new NotFoundException('Conversation not found or access denied');
+    }
     const message = await this.prisma.message.create({
       data: {
         conversationId,
@@ -82,8 +104,8 @@ export class ConversationService {
     return message;
   }
 
-  async processMessage(conversationId: string, userMessage: string) {
-    const conversation = await this.getConversation(conversationId);
+  async processMessage(userId: string, organizationId: string | undefined, conversationId: string, userMessage: string) {
+    const conversation = await this.getConversation(userId, organizationId, conversationId);
     if (!conversation) {
       throw new Error('Conversation not found');
     }
@@ -103,12 +125,14 @@ export class ConversationService {
 
       // 调用智能体服务处理消息
       const response = await this.agentService.processMessage(
+        userId,
+        organizationId,
         conversation.agentId,
         messages
       );
 
       // 保存智能体响应
-      const assistantMessage = await this.addMessage(conversationId, {
+      const assistantMessage = await this.addMessage(userId, organizationId, conversationId, {
         role: MessageRole.ASSISTANT,
         content: response.content,
         metadata: {
@@ -125,9 +149,9 @@ export class ConversationService {
 
     } catch (error: any) {
       this.logger.error(`Failed to process message in conversation ${conversationId}:`, error);
-      
+
       // 保存错误信息
-      await this.addMessage(conversationId, {
+      await this.addMessage(userId, organizationId, conversationId, {
         role: MessageRole.ASSISTANT,
         content: `处理消息时发生错误: ${error.message || error}`,
         metadata: { error: true },
@@ -137,23 +161,38 @@ export class ConversationService {
     }
   }
 
-  async updateConversation(id: string, data: {
+  async updateConversation(userId: string, organizationId: string | undefined, conversationId: string, data: {
     title?: string;
   }) {
     return this.prisma.conversation.update({
-      where: { id },
+      where: { id: conversationId },
       data,
     });
   }
 
-  async deleteConversation(id: string) {
+  async deleteConversation(
+    userId: string,
+    organizationId: string | undefined,
+    conversationId: string
+  ) {
+    // 验证用户权限
+    await this.getConversation(userId, organizationId, conversationId);
+
     // 级联删除消息会自动处理
     return this.prisma.conversation.delete({
-      where: { id },
+      where: { id: conversationId },
     });
   }
 
-  async getMessageHistory(conversationId: string, limit = 50) {
+  async getMessageHistory(
+    userId: string,
+    organizationId: string | undefined,
+    conversationId: string,
+    limit = 50
+  ) {
+    // 验证用户权限
+    await this.getConversation(userId, organizationId, conversationId);
+
     return this.prisma.message.findMany({
       where: { conversationId },
       orderBy: { createdAt: 'asc' },

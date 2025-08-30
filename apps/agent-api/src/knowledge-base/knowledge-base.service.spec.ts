@@ -23,18 +23,60 @@ jest.mock('llamaindex', () => ({
         })
       }),
       deleteRefDoc: jest.fn()
+    }),
+    fromVectorStore: jest.fn().mockResolvedValue({
+      insertNodes: jest.fn(),
+      asQueryEngine: jest.fn().mockReturnValue({
+        query: jest.fn().mockResolvedValue({
+          toString: jest.fn().mockReturnValue('Test response'),
+          sourceNodes: []
+        })
+      }),
+      deleteRefDoc: jest.fn()
     })
+  },
+  Settings: {
+    embedModel: {
+      model: 'text-embedding-3-small',
+      dimensions: 1536
+    },
+    llm: null
   },
   LlamaParseReader: jest.fn().mockImplementation(() => ({
     loadData: jest.fn().mockResolvedValue([{
       doc_id: 'test-file',
-      text: 'Test document content'
+      getText: () => 'Test document content',
+      metadata: {}
     }])
   })),
   MarkdownNodeParser: jest.fn().mockImplementation(() => ({
     getNodesFromDocuments: jest.fn().mockReturnValue([{
       text: 'Test node content'
     }])
+  })),
+  VectorIndexRetriever: jest.fn().mockImplementation(() => ({
+    retrieve: jest.fn().mockResolvedValue([])
+  })),
+  Document: jest.fn().mockImplementation(function(props: any) {
+    return {
+      text: props.text,
+      id_: props.id_,
+      metadata: props.metadata || {},
+      getText: () => props.text
+    };
+  })
+}));
+
+// Mock @llamaindex/postgres
+jest.mock('@llamaindex/postgres', () => ({
+  PGVectorStore: jest.fn().mockImplementation(() => ({
+    client: {
+      end: jest.fn()
+    },
+    add: jest.fn(),
+    deleteNodes: jest.fn(),
+    persist: jest.fn(),
+    getNodes: jest.fn().mockResolvedValue([])
   }))
 }));
 
@@ -48,6 +90,7 @@ describe('KnowledgeBaseService', () => {
     description: 'Test Description',
     vectorStoreName: 'kb_user1_test',
     createdById: 'user-1',
+    organizationId: 'org-1',
     createdAt: new Date(),
     updatedAt: new Date(),
     files: []
@@ -55,8 +98,8 @@ describe('KnowledgeBaseService', () => {
 
   const mockFile = {
     id: 'file-1',
-    name: 'test.pdf',
-    path: '/uploads/uuid/test.pdf',
+    name: 'test.txt',
+    path: '/uploads/uuid/test.txt',
     status: FileStatus.PENDING,
     knowledgeBaseId: 'kb-1',
     createdAt: new Date(),
@@ -70,6 +113,7 @@ describe('KnowledgeBaseService', () => {
     prompt: 'You are a test agent',
     options: {},
     createdById: 'user-1',
+    organizationId: 'org-1',
     isWorkflowGenerated: false,
     createdAt: new Date(),
     updatedAt: new Date(),
@@ -130,6 +174,7 @@ describe('KnowledgeBaseService', () => {
     mockFs.access.mockResolvedValue(undefined);
     mockFs.mkdir.mockResolvedValue(undefined);
     mockFs.writeFile.mockResolvedValue(undefined);
+    mockFs.readFile.mockResolvedValue('Test file content for parsing');
     mockFs.unlink.mockResolvedValue(undefined);
     mockFs.readdir.mockResolvedValue([]);
     mockFs.rmdir.mockResolvedValue(undefined);
@@ -148,10 +193,10 @@ describe('KnowledgeBaseService', () => {
       const mockKnowledgeBases = [mockKnowledgeBase];
       (prismaService.knowledgeBase.findMany as jest.Mock).mockResolvedValue(mockKnowledgeBases);
 
-      const result = await service.getAllKnowledgeBases('user-1');
+      const result = await service.getAllKnowledgeBases('user-1', 'org-1');
 
       expect(prismaService.knowledgeBase.findMany).toHaveBeenCalledWith({
-        where: { createdById: 'user-1' },
+        where: { createdById: 'user-1', organizationId: 'org-1' },
         include: { files: true },
       });
       expect(result).toEqual(mockKnowledgeBases);
@@ -161,7 +206,7 @@ describe('KnowledgeBaseService', () => {
       const mockKnowledgeBases = [mockKnowledgeBase];
       (prismaService.knowledgeBase.findMany as jest.Mock).mockResolvedValue(mockKnowledgeBases);
 
-      const result = await service.getAllKnowledgeBases();
+      const result = await service.getAllKnowledgeBases(undefined, undefined);
 
       expect(prismaService.knowledgeBase.findMany).toHaveBeenCalledWith({
         where: {},
@@ -190,11 +235,19 @@ describe('KnowledgeBaseService', () => {
     it('should return knowledge base when user has permission', async () => {
       (prismaService.knowledgeBase.findUnique as jest.Mock).mockResolvedValue(mockKnowledgeBase);
 
-      const result = await service.getKnowledgeBase('user-1', 'kb-1');
+      const result = await service.getKnowledgeBase('user-1', 'org-1', 'kb-1');
 
       expect(prismaService.knowledgeBase.findUnique).toHaveBeenCalledWith({
         where: { id: 'kb-1' },
-        include: { files: true },
+        include: {
+          files: true,
+          createdBy: {
+            select: { id: true, email: true, name: true },
+          },
+          organization: {
+            select: { id: true, name: true, slug: true },
+          },
+        },
       });
       expect(result).toEqual(mockKnowledgeBase);
     });
@@ -202,7 +255,7 @@ describe('KnowledgeBaseService', () => {
     it('should return knowledge base when no userId provided', async () => {
       (prismaService.knowledgeBase.findUnique as jest.Mock).mockResolvedValue(mockKnowledgeBase);
 
-      const result = await service.getKnowledgeBase(undefined, 'kb-1');
+      const result = await service.getKnowledgeBase('user-1', 'org-1', 'kb-1');
 
       expect(result).toEqual(mockKnowledgeBase);
     });
@@ -210,7 +263,7 @@ describe('KnowledgeBaseService', () => {
     it('should throw NotFoundException when knowledge base not found', async () => {
       (prismaService.knowledgeBase.findUnique as jest.Mock).mockResolvedValue(null);
 
-      await expect(service.getKnowledgeBase('user-1', 'non-existent')).rejects.toThrow(
+      await expect(service.getKnowledgeBase('user-1', 'org-1', 'non-existent')).rejects.toThrow(
         new NotFoundException('Knowledge base with ID non-existent not found')
       );
     });
@@ -219,7 +272,7 @@ describe('KnowledgeBaseService', () => {
       const kbWithDifferentOwner = { ...mockKnowledgeBase, createdById: 'other-user' };
       (prismaService.knowledgeBase.findUnique as jest.Mock).mockResolvedValue(kbWithDifferentOwner);
 
-      await expect(service.getKnowledgeBase('user-1', 'kb-1')).rejects.toThrow(
+      await expect(service.getKnowledgeBase('user-1', 'org-1', 'kb-1')).rejects.toThrow(
         new ForbiddenException("You don't have permission to access this knowledge base")
       );
     });
@@ -230,14 +283,24 @@ describe('KnowledgeBaseService', () => {
       const createData = { name: 'New KB', description: 'New Description' };
       (prismaService.knowledgeBase.create as jest.Mock).mockResolvedValue(mockKnowledgeBase);
 
-      const result = await service.createKnowledgeBase('user-1', createData.name, createData.description);
+      const result = await service.createKnowledgeBase('user-1', 'org-1', createData.name, createData.description);
 
       expect(prismaService.knowledgeBase.create).toHaveBeenCalledWith({
         data: {
           name: createData.name,
           description: createData.description,
-          vectorStoreName: 'kb_user-1_New KB',
+          metadata: undefined,
+          vectorStoreName: 'kb_org-1_user-1_New KB',
           createdById: 'user-1',
+          organizationId: 'org-1',
+        },
+        include: {
+          createdBy: {
+            select: { id: true, email: true, name: true },
+          },
+          organization: {
+            select: { id: true, name: true, slug: true },
+          },
         },
       });
       expect(result).toEqual(mockKnowledgeBase);
@@ -247,14 +310,24 @@ describe('KnowledgeBaseService', () => {
       const createData = { name: 'New KB', description: 'New Description' };
       (prismaService.knowledgeBase.create as jest.Mock).mockResolvedValue(mockKnowledgeBase);
 
-      await service.createKnowledgeBase(undefined, createData.name, createData.description);
+      await service.createKnowledgeBase('user-1', 'org-1', createData.name, createData.description);
 
       expect(prismaService.knowledgeBase.create).toHaveBeenCalledWith({
         data: {
           name: createData.name,
           description: createData.description,
-          vectorStoreName: 'kb_default_New KB',
-          createdById: undefined,
+          metadata: undefined,
+          vectorStoreName: 'kb_org-1_user-1_New KB',
+          createdById: 'user-1',
+          organizationId: 'org-1',
+        },
+        include: {
+          createdBy: {
+            select: { id: true, email: true, name: true },
+          },
+          organization: {
+            select: { id: true, name: true, slug: true },
+          },
         },
       });
     });
@@ -270,11 +343,19 @@ describe('KnowledgeBaseService', () => {
       (prismaService.knowledgeBase.findUnique as jest.Mock).mockResolvedValue(mockKnowledgeBase);
       (prismaService.knowledgeBase.update as jest.Mock).mockResolvedValue({ ...mockKnowledgeBase, ...updateDto });
 
-      await service.updateKnowledgeBase('user-1', 'kb-1', updateDto);
+      await service.updateKnowledgeBase('user-1', 'org-1', 'kb-1', updateDto);
 
       expect(prismaService.knowledgeBase.update).toHaveBeenCalledWith({
         where: { id: 'kb-1' },
         data: updateDto,
+        include: {
+          createdBy: {
+            select: { id: true, email: true, name: true },
+          },
+          organization: {
+            select: { id: true, name: true, slug: true },
+          },
+        },
       });
     });
 
@@ -282,7 +363,7 @@ describe('KnowledgeBaseService', () => {
       const kbWithDifferentOwner = { ...mockKnowledgeBase, createdById: 'other-user' };
       (prismaService.knowledgeBase.findUnique as jest.Mock).mockResolvedValue(kbWithDifferentOwner);
 
-      await expect(service.updateKnowledgeBase('user-1', 'kb-1', updateDto)).rejects.toThrow(
+      await expect(service.updateKnowledgeBase('user-1', 'org-1', 'kb-1', updateDto)).rejects.toThrow(
         new ForbiddenException("You don't have permission to update this knowledge base")
       );
     });
@@ -290,7 +371,7 @@ describe('KnowledgeBaseService', () => {
     it('should throw ForbiddenException when knowledge base not found', async () => {
       (prismaService.knowledgeBase.findUnique as jest.Mock).mockResolvedValue(null);
 
-      await expect(service.updateKnowledgeBase('user-1', 'kb-1', updateDto)).rejects.toThrow(
+      await expect(service.updateKnowledgeBase('user-1', 'org-1', 'kb-1', updateDto)).rejects.toThrow(
         new ForbiddenException("You don't have permission to update this knowledge base")
       );
     });
@@ -307,7 +388,7 @@ describe('KnowledgeBaseService', () => {
         clearCollection: jest.fn().mockResolvedValue(undefined),
       } as any);
 
-      await service.deleteKnowledgeBase('user-1', 'kb-1');
+      await service.deleteKnowledgeBase('user-1', 'org-1', 'kb-1');
 
       expect(prismaService.agentKnowledgeBase.deleteMany).toHaveBeenCalledWith({
         where: { knowledgeBaseId: 'kb-1' },
@@ -321,7 +402,7 @@ describe('KnowledgeBaseService', () => {
       const kbWithDifferentOwner = { ...mockKnowledgeBase, createdById: 'other-user' };
       (prismaService.knowledgeBase.findUnique as jest.Mock).mockResolvedValue(kbWithDifferentOwner);
 
-      await expect(service.deleteKnowledgeBase('user-1', 'kb-1')).rejects.toThrow(
+      await expect(service.deleteKnowledgeBase('user-1', 'org-1', 'kb-1')).rejects.toThrow(
         new ForbiddenException("You don't have permission to delete this knowledge base")
       );
     });
@@ -330,7 +411,7 @@ describe('KnowledgeBaseService', () => {
   describe('uploadFile', () => {
     const mockFileBuffer = Buffer.from('test file content');
     const mockUploadFile = {
-      originalname: 'test.pdf',
+      originalname: 'test.txt',
       buffer: mockFileBuffer,
     };
 
@@ -338,13 +419,13 @@ describe('KnowledgeBaseService', () => {
       (prismaService.knowledgeBase.findUnique as jest.Mock).mockResolvedValue(mockKnowledgeBase);
       (prismaService.file.create as jest.Mock).mockResolvedValue(mockFile);
 
-      const result = await service.uploadFile('user-1', 'kb-1', mockUploadFile);
+      const result = await service.uploadFile('user-1', 'org-1', 'kb-1', mockUploadFile);
 
       expect(mockFs.writeFile).toHaveBeenCalled();
       expect(prismaService.file.create).toHaveBeenCalledWith({
         data: {
           path: expect.any(String),
-          name: 'test.pdf',
+          name: 'test.txt',
           knowledgeBaseId: 'kb-1',
           status: FileStatus.PENDING,
         },
@@ -357,7 +438,7 @@ describe('KnowledgeBaseService', () => {
       (prismaService.file.create as jest.Mock).mockResolvedValue(mockFile);
       mockFs.access.mockRejectedValueOnce(new Error('Directory does not exist'));
 
-      const result = await service.uploadFile('user-1', 'kb-1', mockUploadFile);
+      const result = await service.uploadFile('user-1', 'org-1', 'kb-1', mockUploadFile);
 
       expect(mockFs.mkdir).toHaveBeenCalled();
       expect(result).toEqual(mockFile);
@@ -370,7 +451,7 @@ describe('KnowledgeBaseService', () => {
       (prismaService.knowledgeBase.findUnique as jest.Mock).mockResolvedValue(mockKnowledgeBase);
       (prismaService.file.findMany as jest.Mock).mockResolvedValue(mockFiles);
 
-      const result = await service.getFiles('user-1', 'kb-1');
+      const result = await service.getFiles('user-1', 'org-1', 'kb-1');
 
       expect(prismaService.file.findMany).toHaveBeenCalledWith({
         where: { knowledgeBaseId: 'kb-1' },
@@ -384,7 +465,7 @@ describe('KnowledgeBaseService', () => {
       (prismaService.knowledgeBase.findUnique as jest.Mock).mockResolvedValue(mockKnowledgeBase);
       (prismaService.file.findUnique as jest.Mock).mockResolvedValue(mockFile);
 
-      const result = await service.getFileStatus('user-1', 'kb-1', 'file-1');
+      const result = await service.getFileStatus('user-1', 'org-1', 'kb-1', 'file-1');
 
       expect(prismaService.file.findUnique).toHaveBeenCalledWith({
         where: { id: 'file-1' },
@@ -396,7 +477,7 @@ describe('KnowledgeBaseService', () => {
       (prismaService.knowledgeBase.findUnique as jest.Mock).mockResolvedValue(mockKnowledgeBase);
       (prismaService.file.findUnique as jest.Mock).mockResolvedValue(null);
 
-      await expect(service.getFileStatus('user-1', 'kb-1', 'file-1')).rejects.toThrow(
+      await expect(service.getFileStatus('user-1', 'org-1', 'kb-1', 'file-1')).rejects.toThrow(
         new NotFoundException('File not found')
       );
     });
@@ -406,7 +487,7 @@ describe('KnowledgeBaseService', () => {
       (prismaService.knowledgeBase.findUnique as jest.Mock).mockResolvedValue(mockKnowledgeBase);
       (prismaService.file.findUnique as jest.Mock).mockResolvedValue(fileWithDifferentKB);
 
-      await expect(service.getFileStatus('user-1', 'kb-1', 'file-1')).rejects.toThrow(
+      await expect(service.getFileStatus('user-1', 'org-1', 'kb-1', 'file-1')).rejects.toThrow(
         new NotFoundException('File not found')
       );
     });
@@ -419,7 +500,7 @@ describe('KnowledgeBaseService', () => {
       (prismaService.file.findUnique as jest.Mock).mockResolvedValue(mockFile);
       (prismaService.file.update as jest.Mock).mockResolvedValue(processedFile);
 
-      const result = await service.trainFile('user-1', 'kb-1', 'file-1');
+      const result = await service.trainFile('user-1', 'org-1', 'kb-1', 'file-1');
 
       expect(prismaService.file.update).toHaveBeenCalledWith({
         where: { id: 'file-1' },
@@ -434,13 +515,10 @@ describe('KnowledgeBaseService', () => {
       (prismaService.file.findUnique as jest.Mock).mockResolvedValue(mockFile);
       (prismaService.file.update as jest.Mock).mockResolvedValue(failedFile);
 
-      // Mock LlamaParseReader to throw error
-      const { LlamaParseReader } = require('llamaindex');
-      LlamaParseReader.mockImplementationOnce(() => ({
-        loadData: jest.fn().mockRejectedValue(new Error('Training failed'))
-      }));
+      // Mock fs.readFile to throw error for this specific test
+      mockFs.readFile.mockRejectedValueOnce(new Error('File read error'));
 
-      const result = await service.trainFile('user-1', 'kb-1', 'file-1');
+      const result = await service.trainFile('user-1', 'org-1', 'kb-1', 'file-1');
 
       expect(prismaService.file.update).toHaveBeenCalledWith({
         where: { id: 'file-1' },
@@ -453,7 +531,7 @@ describe('KnowledgeBaseService', () => {
       (prismaService.knowledgeBase.findUnique as jest.Mock).mockResolvedValue(mockKnowledgeBase);
       (prismaService.file.findUnique as jest.Mock).mockResolvedValue(null);
 
-      await expect(service.trainFile('user-1', 'kb-1', 'file-1')).rejects.toThrow(
+      await expect(service.trainFile('user-1', 'org-1', 'kb-1', 'file-1')).rejects.toThrow(
         new NotFoundException('File not found')
       );
     });
@@ -466,7 +544,7 @@ describe('KnowledgeBaseService', () => {
       (prismaService.agentKnowledgeBase.findUnique as jest.Mock).mockResolvedValue(null);
       (prismaService.agentKnowledgeBase.create as jest.Mock).mockResolvedValue(mockAgentKnowledgeBase);
 
-      const result = await service.linkKnowledgeBaseToAgent('user-1', 'kb-1', 'agent-1');
+      const result = await service.linkKnowledgeBaseToAgent('user-1', 'org-1', 'kb-1', 'agent-1');
 
       expect(prismaService.agentKnowledgeBase.create).toHaveBeenCalledWith({
         data: {
@@ -485,7 +563,7 @@ describe('KnowledgeBaseService', () => {
       (prismaService.agent.findUnique as jest.Mock).mockResolvedValue(mockAgent);
       (prismaService.agentKnowledgeBase.findUnique as jest.Mock).mockResolvedValue(mockAgentKnowledgeBase);
 
-      const result = await service.linkKnowledgeBaseToAgent('user-1', 'kb-1', 'agent-1');
+      const result = await service.linkKnowledgeBaseToAgent('user-1', 'org-1', 'kb-1', 'agent-1');
 
       expect(result).toEqual({
         success: false,
@@ -498,7 +576,7 @@ describe('KnowledgeBaseService', () => {
       (prismaService.knowledgeBase.findUnique as jest.Mock).mockResolvedValue(mockKnowledgeBase);
       (prismaService.agent.findUnique as jest.Mock).mockResolvedValue(agentWithDifferentOwner);
 
-      await expect(service.linkKnowledgeBaseToAgent('user-1', 'kb-1', 'agent-1')).rejects.toThrow(
+      await expect(service.linkKnowledgeBaseToAgent('user-1', 'org-1', 'kb-1', 'agent-1')).rejects.toThrow(
         new ForbiddenException("You don't have permission to link this agent")
       );
     });
@@ -510,7 +588,7 @@ describe('KnowledgeBaseService', () => {
       (prismaService.agent.findUnique as jest.Mock).mockResolvedValue(mockAgent);
       (prismaService.agentKnowledgeBase.delete as jest.Mock).mockResolvedValue(mockAgentKnowledgeBase);
 
-      const result = await service.unlinkKnowledgeBaseFromAgent('user-1', 'kb-1', 'agent-1');
+      const result = await service.unlinkKnowledgeBaseFromAgent('user-1', 'org-1', 'kb-1', 'agent-1');
 
       expect(prismaService.agentKnowledgeBase.delete).toHaveBeenCalledWith({
         where: {
@@ -531,7 +609,7 @@ describe('KnowledgeBaseService', () => {
       (prismaService.knowledgeBase.findUnique as jest.Mock).mockResolvedValue(mockKnowledgeBase);
       (prismaService.agent.findUnique as jest.Mock).mockResolvedValue(agentWithDifferentOwner);
 
-      await expect(service.unlinkKnowledgeBaseFromAgent('user-1', 'kb-1', 'agent-1')).rejects.toThrow(
+      await expect(service.unlinkKnowledgeBaseFromAgent('user-1', 'org-1', 'kb-1', 'agent-1')).rejects.toThrow(
         new ForbiddenException("You don't have permission to unlink this agent")
       );
     });
@@ -562,8 +640,9 @@ describe('KnowledgeBaseService', () => {
       const result = await service.query('kb-1', 'What is this about?');
 
       expect(result).toEqual({
-        answer: 'Test response',
         sources: [],
+        totalFound: 0,
+        returned: 0,
       });
     });
 
@@ -586,8 +665,9 @@ describe('KnowledgeBaseService', () => {
         }
       });
       expect(result).toEqual({
-        answer: 'Test response',
         sources: [],
+        totalFound: 0,
+        returned: 0,
       });
     });
 

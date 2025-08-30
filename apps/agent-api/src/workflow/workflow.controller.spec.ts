@@ -2,10 +2,18 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { NotFoundException } from '@nestjs/common';
 import { WorkflowController, CreateWorkflowDslDto, CreateWorkflowDto, ExecuteWorkflowDto, UpdateWorkflowAgentDto } from './workflow.controller';
 import { WorkflowService } from './workflow.service';
+import { CurrentUserData } from '../auth/current-user.decorator';
 
 describe('WorkflowController', () => {
   let controller: WorkflowController;
   let workflowService: any;
+  
+  const mockUser: CurrentUserData = {
+    id: 'test-user-id',
+    email: 'test@example.com',
+    name: 'Test User',
+    organizationId: 'test-org-id',
+  };
 
   const mockWorkflow = { 
     id: 'workflow-1', 
@@ -26,7 +34,7 @@ describe('WorkflowController', () => {
       createDslGeneratorWorkflow: jest.fn(),
       createWorkflow: jest.fn(),
       getAllWorkflows: jest.fn(),
-      getWorkflow: jest.fn(),
+      findOneWorkflow: jest.fn(),
       executeWorkflow: jest.fn(),
       getWorkflowAgents: jest.fn(),
       updateWorkflowAgent: jest.fn(),
@@ -97,16 +105,16 @@ describe('WorkflowController', () => {
     it('should create a new workflow', async () => {
       workflowService.createWorkflow.mockResolvedValue(mockWorkflow);
 
-      const result = await controller.createWorkflow(createWorkflowDto);
+      const result = await controller.createWorkflow(mockUser, createWorkflowDto);
 
-      expect(workflowService.createWorkflow).toHaveBeenCalledWith(createWorkflowDto);
+      expect(workflowService.createWorkflow).toHaveBeenCalledWith(mockUser.id, mockUser.organizationId, createWorkflowDto);
       expect(result.data).toEqual(mockWorkflow);
     });
 
     it('should handle creation errors', async () => {
       workflowService.createWorkflow.mockRejectedValue(new Error('Invalid DSL'));
 
-      await expect(controller.createWorkflow(createWorkflowDto)).rejects.toThrow('Invalid DSL');
+      await expect(controller.createWorkflow(mockUser, createWorkflowDto)).rejects.toThrow('Invalid DSL');
     });
   });
 
@@ -115,16 +123,16 @@ describe('WorkflowController', () => {
       const mockWorkflows = [mockWorkflow];
       workflowService.getAllWorkflows.mockResolvedValue(mockWorkflows);
 
-      const result = await controller.getAllWorkflows();
+      const result = await controller.getAllWorkflows(mockUser);
 
-      expect(workflowService.getAllWorkflows).toHaveBeenCalled();
+      expect(workflowService.getAllWorkflows).toHaveBeenCalledWith(mockUser.id, mockUser.organizationId);
       expect(result.data).toEqual(mockWorkflows);
     });
 
     it('should return empty array when no workflows exist', async () => {
       workflowService.getAllWorkflows.mockResolvedValue([]);
 
-      const result = await controller.getAllWorkflows();
+      const result = await controller.getAllWorkflows(mockUser);
 
       expect(result.data).toEqual([]);
     });
@@ -132,20 +140,22 @@ describe('WorkflowController', () => {
 
   describe('getWorkflow', () => {
     it('should return a single workflow', async () => {
-      workflowService.getWorkflow.mockResolvedValue(mockWorkflow);
+      const mockUser = { id: 'user-1', organizationId: 'org-1' };
+      workflowService.findOneWorkflow.mockResolvedValue(mockWorkflow);
 
-      const result = await controller.getWorkflow('workflow-1');
+      const result = await controller.getWorkflow(mockUser as any, 'workflow-1');
 
-      expect(workflowService.getWorkflow).toHaveBeenCalledWith('workflow-1');
+      expect(workflowService.findOneWorkflow).toHaveBeenCalledWith('user-1', 'org-1', 'workflow-1');
       expect(result.data).toEqual(mockWorkflow);
     });
 
     it('should throw NotFoundException when workflow not found', async () => {
-      workflowService.getWorkflow.mockRejectedValue(
+      const mockUser = { id: 'user-1', organizationId: 'org-1' };
+      workflowService.findOneWorkflow.mockRejectedValue(
         new NotFoundException('Workflow with id non-existent not found')
       );
 
-      await expect(controller.getWorkflow('non-existent')).rejects.toThrow(
+      await expect(controller.getWorkflow(mockUser as any, 'non-existent')).rejects.toThrow(
         new NotFoundException('Workflow with id non-existent not found')
       );
     });
@@ -160,9 +170,11 @@ describe('WorkflowController', () => {
     it('should execute workflow with input and context', async () => {
       workflowService.executeWorkflow.mockResolvedValue(mockExecutionResult);
 
-      const result = await controller.executeWorkflow('workflow-1', executeDto);
+      const result = await controller.executeWorkflow(mockUser, 'workflow-1', executeDto);
 
       expect(workflowService.executeWorkflow).toHaveBeenCalledWith(
+        mockUser.id,
+        mockUser.organizationId,
         'workflow-1',
         executeDto.input,
         executeDto.context
@@ -171,15 +183,18 @@ describe('WorkflowController', () => {
     });
 
     it('should execute workflow with only input', async () => {
+      const mockUser = { id: 'user-1', organizationId: 'org-1' };
       const executeDtoWithoutContext: ExecuteWorkflowDto = {
         input: { userMessage: 'Hello' }
       };
 
       workflowService.executeWorkflow.mockResolvedValue(mockExecutionResult);
 
-      const result = await controller.executeWorkflow('workflow-1', executeDtoWithoutContext);
+      const result = await controller.executeWorkflow(mockUser as any, 'workflow-1', executeDtoWithoutContext);
 
       expect(workflowService.executeWorkflow).toHaveBeenCalledWith(
+        'user-1',
+        'org-1',
         'workflow-1',
         executeDtoWithoutContext.input,
         undefined
@@ -188,19 +203,21 @@ describe('WorkflowController', () => {
     });
 
     it('should throw NotFoundException when workflow not found', async () => {
+      const mockUser = { id: 'user-1', organizationId: 'org-1' };
       workflowService.executeWorkflow.mockRejectedValue(
         new NotFoundException('Workflow with id non-existent not found')
       );
 
-      await expect(controller.executeWorkflow('non-existent', executeDto)).rejects.toThrow(
+      await expect(controller.executeWorkflow(mockUser as any, 'non-existent', executeDto)).rejects.toThrow(
         new NotFoundException('Workflow with id non-existent not found')
       );
     });
 
     it('should handle execution errors', async () => {
+      const mockUser = { id: 'user-1', organizationId: 'org-1' };
       workflowService.executeWorkflow.mockRejectedValue(new Error('Execution failed'));
 
-      await expect(controller.executeWorkflow('workflow-1', executeDto)).rejects.toThrow('Execution failed');
+      await expect(controller.executeWorkflow(mockUser as any, 'workflow-1', executeDto)).rejects.toThrow('Execution failed');
     });
   });
 
@@ -239,11 +256,11 @@ describe('WorkflowController', () => {
 
       workflowService.updateWorkflowAgent.mockResolvedValue(updatedAgent);
 
-      const result = await controller.updateWorkflowAgent('workflow-1', 'TestAgent', updateDto);
+      const result = await controller.updateWorkflowAgent('workflow-1', 'agent-1', updateDto);
 
       expect(workflowService.updateWorkflowAgent).toHaveBeenCalledWith(
         'workflow-1',
-        'TestAgent',
+        'agent-1',
         updateDto
       );
       expect(result.data).toEqual(updatedAgent);
@@ -261,11 +278,11 @@ describe('WorkflowController', () => {
 
       workflowService.updateWorkflowAgent.mockResolvedValue(updatedAgent);
 
-      const result = await controller.updateWorkflowAgent('workflow-1', 'TestAgent', partialUpdateDto);
+      const result = await controller.updateWorkflowAgent('workflow-1', 'agent-1', partialUpdateDto);
 
       expect(workflowService.updateWorkflowAgent).toHaveBeenCalledWith(
         'workflow-1',
-        'TestAgent',
+        'agent-1',
         partialUpdateDto
       );
       expect(result.data).toEqual(updatedAgent);
@@ -273,12 +290,12 @@ describe('WorkflowController', () => {
 
     it('should throw error when workflow agent not found', async () => {
       workflowService.updateWorkflowAgent.mockRejectedValue(
-        new Error('Workflow agent TestAgent not found')
+        new Error('Workflow agent agent-1 not found in workflow workflow-1')
       );
 
       await expect(
-        controller.updateWorkflowAgent('workflow-1', 'TestAgent', updateDto)
-      ).rejects.toThrow('Workflow agent TestAgent not found');
+        controller.updateWorkflowAgent('workflow-1', 'agent-1', updateDto)
+      ).rejects.toThrow('Workflow agent agent-1 not found in workflow workflow-1');
     });
   });
 
@@ -288,10 +305,10 @@ describe('WorkflowController', () => {
       workflowService.deleteWorkflowAgents.mockResolvedValue(undefined);
       workflowService.deleteWorkflow.mockResolvedValue(deletedWorkflow);
 
-      const result = await controller.deleteWorkflow('workflow-1');
+      const result = await controller.deleteWorkflow(mockUser, 'workflow-1');
 
       expect(workflowService.deleteWorkflowAgents).toHaveBeenCalledWith('workflow-1');
-      expect(workflowService.deleteWorkflow).toHaveBeenCalledWith('workflow-1');
+      expect(workflowService.deleteWorkflow).toHaveBeenCalledWith(mockUser.id, mockUser.organizationId, 'workflow-1');
       expect(result.success).toBe(true);
       expect(result.result.operation).toBe('delete');
     });
@@ -302,7 +319,7 @@ describe('WorkflowController', () => {
         new NotFoundException('Workflow with id non-existent not found')
       );
 
-      await expect(controller.deleteWorkflow('non-existent')).rejects.toThrow(
+      await expect(controller.deleteWorkflow(mockUser, 'non-existent')).rejects.toThrow(
         new NotFoundException('Workflow with id non-existent not found')
       );
 
@@ -312,7 +329,7 @@ describe('WorkflowController', () => {
     it('should handle errors during agent cleanup', async () => {
       workflowService.deleteWorkflowAgents.mockRejectedValue(new Error('Agent cleanup failed'));
 
-      await expect(controller.deleteWorkflow('workflow-1')).rejects.toThrow('Agent cleanup failed');
+      await expect(controller.deleteWorkflow(mockUser, 'workflow-1')).rejects.toThrow('Agent cleanup failed');
 
       expect(workflowService.deleteWorkflow).not.toHaveBeenCalled();
     });
@@ -342,6 +359,7 @@ describe('WorkflowController', () => {
     });
 
     it('should accept valid CreateWorkflowDto', async () => {
+      const mockUser = { id: 'user-1', organizationId: 'org-1' };
       const validDto: CreateWorkflowDto = {
         name: 'Complex Workflow',
         description: 'A complex multi-step workflow',
@@ -361,13 +379,14 @@ describe('WorkflowController', () => {
 
       workflowService.createWorkflow.mockResolvedValue({ ...mockWorkflow, ...validDto });
 
-      const result = await controller.createWorkflow(validDto);
+      const result = await controller.createWorkflow(mockUser as any, validDto);
 
-      expect(workflowService.createWorkflow).toHaveBeenCalledWith(validDto);
+      expect(workflowService.createWorkflow).toHaveBeenCalledWith('user-1', 'org-1', validDto);
       expect(result.data).toBeDefined();
     });
 
     it('should accept valid ExecuteWorkflowDto', async () => {
+      const mockUser = { id: 'user-1', organizationId: 'org-1' };
       const validDto: ExecuteWorkflowDto = {
         input: {
           userMessage: 'Process this data',
@@ -386,9 +405,11 @@ describe('WorkflowController', () => {
         input: validDto.input,
       });
 
-      const result = await controller.executeWorkflow('workflow-1', validDto);
+      const result = await controller.executeWorkflow(mockUser as any, 'workflow-1', validDto);
 
       expect(workflowService.executeWorkflow).toHaveBeenCalledWith(
+        'user-1',
+        'org-1',
         'workflow-1',
         validDto.input,
         validDto.context
@@ -414,11 +435,11 @@ describe('WorkflowController', () => {
 
       workflowService.updateWorkflowAgent.mockResolvedValue(updatedAgent);
 
-      const result = await controller.updateWorkflowAgent('workflow-1', 'TestAgent', validDto);
+      const result = await controller.updateWorkflowAgent('workflow-1', 'agent-1', validDto);
 
       expect(workflowService.updateWorkflowAgent).toHaveBeenCalledWith(
         'workflow-1',
-        'TestAgent',
+        'agent-1',
         validDto
       );
       expect(result.data).toEqual(updatedAgent);

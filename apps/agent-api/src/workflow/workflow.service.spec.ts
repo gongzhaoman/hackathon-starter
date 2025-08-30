@@ -81,13 +81,13 @@ describe('WorkflowService', () => {
         findUnique: jest.fn(),
       },
       workflowAgent: {
-        findFirst: jest.fn(),
+        findUnique: jest.fn(),
         findMany: jest.fn(),
         create: jest.fn(),
         deleteMany: jest.fn(),
       },
       agentToolkit: {
-        findFirst: jest.fn(),
+        findUnique: jest.fn(),
         create: jest.fn(),
         deleteMany: jest.fn(),
       },
@@ -160,13 +160,15 @@ describe('WorkflowService', () => {
     it('should create a workflow with valid DSL', async () => {
       (prismaService.workFlow.create as jest.Mock).mockResolvedValue(mockWorkflow);
 
-      const result = await service.createWorkflow(createWorkflowDto);
+      const result = await service.createWorkflow('test-user-id', 'test-org-id', createWorkflowDto);
 
       expect(prismaService.workFlow.create).toHaveBeenCalledWith({
         data: {
           name: createWorkflowDto.name,
           description: createWorkflowDto.description,
           DSL: createWorkflowDto.dsl,
+          createdById: 'test-user-id',
+          organizationId: 'test-org-id',
         },
       });
       expect(result).toEqual(mockWorkflow);
@@ -179,7 +181,7 @@ describe('WorkflowService', () => {
         dsl: { invalid: 'dsl' },
       };
 
-      await expect(service.createWorkflow(invalidDto)).rejects.toThrow(
+      await expect(service.createWorkflow('test-user-id', 'test-org-id', invalidDto)).rejects.toThrow(
         'DSL missing required field: id'
       );
     });
@@ -194,7 +196,7 @@ describe('WorkflowService', () => {
         },
       };
 
-      await expect(service.createWorkflow(invalidDto)).rejects.toThrow(
+      await expect(service.createWorkflow('test-user-id', 'test-org-id', invalidDto)).rejects.toThrow(
         'DSL must have at least 2 events'
       );
     });
@@ -205,10 +207,10 @@ describe('WorkflowService', () => {
       const mockWorkflows = [mockWorkflow];
       (prismaService.workFlow.findMany as jest.Mock).mockResolvedValue(mockWorkflows);
 
-      const result = await service.getAllWorkflows();
+      const result = await service.getAllWorkflows('test-user-id', 'test-org-id');
 
       expect(prismaService.workFlow.findMany).toHaveBeenCalledWith({
-        where: { deleted: false },
+        where: { deleted: false, createdById: 'test-user-id', organizationId: 'test-org-id' },
         orderBy: { createdAt: 'desc' },
       });
       expect(result).toEqual(mockWorkflows);
@@ -219,10 +221,10 @@ describe('WorkflowService', () => {
     it('should return a workflow by id', async () => {
       (prismaService.workFlow.findUnique as jest.Mock).mockResolvedValue(mockWorkflow);
 
-      const result = await service.getWorkflow('workflow-1');
+      const result = await service.findOneWorkflow('test-user-id', 'test-org-id', 'workflow-1');
 
       expect(prismaService.workFlow.findUnique).toHaveBeenCalledWith({
-        where: { id: 'workflow-1', deleted: false },
+        where: { id: 'workflow-1', deleted: false, createdById: 'test-user-id', organizationId: 'test-org-id' },
       });
       expect(result).toEqual(mockWorkflow);
     });
@@ -230,7 +232,7 @@ describe('WorkflowService', () => {
     it('should throw NotFoundException when workflow is not found', async () => {
       (prismaService.workFlow.findUnique as jest.Mock).mockResolvedValue(null);
 
-      await expect(service.getWorkflow('non-existent')).rejects.toThrow(
+      await expect(service.findOneWorkflow('test-user-id', 'test-org-id', 'non-existent')).rejects.toThrow(
         new NotFoundException('Workflow with id non-existent not found')
       );
     });
@@ -242,7 +244,7 @@ describe('WorkflowService', () => {
       (prismaService.workFlow.findUnique as jest.Mock).mockResolvedValue(mockWorkflow);
       (prismaService.workFlow.update as jest.Mock).mockResolvedValue(deletedWorkflow);
 
-      const result = await service.deleteWorkflow('workflow-1');
+      const result = await service.deleteWorkflow('test-user-id', 'test-org-id', 'workflow-1');
 
       expect(prismaService.workFlow.update).toHaveBeenCalledWith({
         where: { id: 'workflow-1' },
@@ -254,7 +256,7 @@ describe('WorkflowService', () => {
     it('should throw NotFoundException when workflow is not found', async () => {
       (prismaService.workFlow.findUnique as jest.Mock).mockResolvedValue(null);
 
-      await expect(service.deleteWorkflow('non-existent')).rejects.toThrow(
+      await expect(service.deleteWorkflow('test-user-id', 'test-org-id', 'non-existent')).rejects.toThrow(
         new NotFoundException('Workflow with id non-existent not found')
       );
     });
@@ -314,7 +316,8 @@ describe('WorkflowService', () => {
           description: 'Test agent',
           prompt: 'You are a test agent',
           options: { result: 'string' },
-          createdById: 'workflow-system',
+          createdById: 'default-user-id',
+          organizationId: 'default-org-id',
           isWorkflowGenerated: true,
         },
       });
@@ -343,15 +346,17 @@ describe('WorkflowService', () => {
       };
 
       (toolsService.getToolByName as jest.Mock).mockResolvedValue(mockTool);
-      (prismaService.workflowAgent.findFirst as jest.Mock).mockResolvedValue(existingWorkflowAgent);
+      (prismaService.workflowAgent.findUnique as jest.Mock).mockResolvedValue(existingWorkflowAgent);
       (agentService.createAgentInstance as jest.Mock).mockResolvedValue({});
 
       const workflow = await service.fromDsl(dslWithAgents, 'workflow-1');
 
-      expect(prismaService.workflowAgent.findFirst).toHaveBeenCalledWith({
+      expect(prismaService.workflowAgent.findUnique).toHaveBeenCalledWith({
         where: {
-          workflowId: 'workflow-1',
-          agentName: 'TestAgent',
+          workflowId_agentName: {
+            workflowId: 'workflow-1',
+            agentName: 'TestAgent',
+          },
         },
         include: {
           agent: true,
@@ -378,7 +383,7 @@ describe('WorkflowService', () => {
       (toolsService.getToolByName as jest.Mock).mockResolvedValue(mockTool);
       (prismaService.agent.create as jest.Mock).mockResolvedValue(mockAgent);
       (prismaService.agentKnowledgeBase.create as jest.Mock).mockResolvedValue({});
-      (prismaService.agentToolkit.findFirst as jest.Mock).mockResolvedValue(null);
+      (prismaService.agentToolkit.findUnique as jest.Mock).mockResolvedValue(null);
       (prismaService.agentToolkit.create as jest.Mock).mockResolvedValue({});
       (toolsService.getAgentTools as jest.Mock).mockResolvedValue([]);
       (agentService.createAgentInstance as jest.Mock).mockResolvedValue({});
@@ -440,7 +445,7 @@ describe('WorkflowService', () => {
       // We need to mock the fromDsl method to return our mock workflow
       jest.spyOn(service, 'fromDsl' as keyof WorkflowService).mockResolvedValue(mockWorkflowInstance as any);
 
-      const result = await service.executeWorkflow('workflow-1', input, context);
+      const result = await service.executeWorkflow('test-user-id', 'test-org-id', 'workflow-1', input, context);
 
       expect(result).toEqual({
         workflowId: 'workflow-1',
@@ -453,7 +458,7 @@ describe('WorkflowService', () => {
     it('should throw NotFoundException when workflow is not found', async () => {
       (prismaService.workFlow.findUnique as jest.Mock).mockResolvedValue(null);
 
-      await expect(service.executeWorkflow('non-existent', {})).rejects.toThrow(
+      await expect(service.executeWorkflow('test-user-id', 'test-org-id', 'non-existent', {}, undefined)).rejects.toThrow(
         new NotFoundException('Workflow with id non-existent not found')
       );
     });

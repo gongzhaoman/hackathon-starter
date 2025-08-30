@@ -16,11 +16,13 @@ export class AgentService {
     private readonly knowledgeBaseService: KnowledgeBaseService,
   ) {}
 
-  async findAll() {
+  async findAll(userId: string, organizationId: string | undefined) {
     return this.prisma.agent.findMany({
       where: {
         deleted: false,
-        isWorkflowGenerated: false  // 只返回用户创建的智能体，隐藏工作流生成的智能体
+        isWorkflowGenerated: false,  // 只返回用户创建的智能体，隐藏工作流生成的智能体
+        createdById: userId,
+        ...(organizationId && { organizationId }),
       },
       include: {
         agentToolkits: {
@@ -41,17 +43,23 @@ export class AgentService {
     });
   }
 
-  async findAllPaginated(params: {
-    page: number;
-    pageSize: number;
-    skip: number;
-    sortBy?: string;
-    sortOrder?: 'asc' | 'desc';
-    search?: string;
-  }) {
+  async findAllPaginated(
+    userId: string,
+    organizationId: string | undefined,
+    params: {
+      page: number;
+      pageSize: number;
+      skip: number;
+      sortBy?: string;
+      sortOrder?: 'asc' | 'desc';
+      search?: string;
+    }
+  ) {
     const baseWhere = {
       deleted: false,
-      isWorkflowGenerated: false
+      isWorkflowGenerated: false,
+      createdById: userId,
+      ...(organizationId && { organizationId }),
     };
 
     // 添加搜索条件
@@ -102,9 +110,14 @@ export class AgentService {
     return { data, total };
   }
 
-  async findOne(id: string) {
+  async findOneAgent(userId: string, organizationId: string | undefined, agentId: string) {
     const agent = await this.prisma.agent.findUnique({
-      where: { id, deleted: false },
+      where: {
+        id: agentId,
+        deleted: false,
+        createdById: userId,
+        ...(organizationId && { organizationId }),
+      },
       include: {
         agentTools: {
           include: {
@@ -125,17 +138,19 @@ export class AgentService {
             knowledgeBase: true,
           },
         },
+        createdBy: true,
+        organization: true,
       },
     });
 
     if (!agent) {
-      throw new NotFoundException(`Agent with ID ${id} not found`);
+      throw new NotFoundException(`Agent with ID ${agentId} not found`);
     }
 
     return agent;
   }
 
-  async create(createAgentDto: CreateAgentDto) {
+  async createAgent(userId: string, organizationId: string | undefined, createAgentDto: CreateAgentDto) {
     // 创建智能体
     const agent = await this.prisma.agent.create({
       data: {
@@ -143,6 +158,8 @@ export class AgentService {
         description: createAgentDto.description,
         prompt: createAgentDto.prompt,
         options: createAgentDto.options,
+        createdById: userId,
+        organizationId: organizationId || 'default-org-id',
       },
     });
 
@@ -190,7 +207,7 @@ export class AgentService {
             ...config.settings,
             agentId: agentId, // 自动设置 agentId
           };
-          
+
           await this.prisma.agentToolkit.create({
             data: {
               agentId: agentId,
@@ -234,12 +251,12 @@ export class AgentService {
     }
   }
 
-  async update(id: string, updateAgentDto: UpdateAgentDto) {
-    await this.findOne(id);
+  async updateAgent(userId: string, organizationId: string | undefined, agentId: string, updateAgentDto: UpdateAgentDto) {
+    await this.findOneAgent(userId, organizationId, agentId);
 
     // 更新智能体基本信息
     const agent = await this.prisma.agent.update({
-      where: { id },
+      where: { id: agentId },
       data: {
         name: updateAgentDto.name,
         description: updateAgentDto.description,
@@ -252,21 +269,21 @@ export class AgentService {
     if (updateAgentDto.toolkits) {
       // 先删除现有的工具包分配
       await this.prisma.agentToolkit.deleteMany({
-        where: { agentId: id },
+        where: { agentId: agentId },
       });
 
       // 重新分配工具包
-      await this.assignToolkitsToAgent(id, updateAgentDto);
+      await this.assignToolkitsToAgent(agentId, updateAgentDto);
     }
 
     return agent;
   }
 
-  async remove(id: string) {
-    await this.findOne(id);
+  async removeAgent(userId: string, organizationId: string | undefined, agentId: string) {
+    await this.findOneAgent(userId, organizationId, agentId);
 
     return this.prisma.agent.update({
-      where: { id },
+      where: { id: agentId },
       data: { deleted: true },
     });
   }
@@ -286,16 +303,16 @@ export class AgentService {
     return agent;
   }
 
-  async chatWithAgent(agentId: string, chatDto: ChatWithAgentDto) {
+  async chatWithAgent(userId: string, organizationId: string | undefined, agentId: string, chatDto: ChatWithAgentDto) {
     // 获取智能体信息
-    const agent = await this.findOne(agentId);
+    const agent = await this.findOneAgent(userId, organizationId, agentId);
 
     // 获取智能体的工具
     const tools = await this.toolsService.getAgentTools(agentId);
 
     // 生成增强的系统提示词（包含知识库信息）
     const enhancedPrompt = await this.generateEnhancedPrompt(agentId, agent.prompt);
-    
+
     // 创建智能体实例
     const agentInstance = await this.llamaIndexService.createAgent(
       tools,
@@ -315,8 +332,8 @@ export class AgentService {
     };
   }
 
-  async getAgentToolkits(agentId: string) {
-    await this.findOne(agentId); // 验证智能体存在
+  async getAgentToolkits(userId: string, organizationId: string | undefined, agentId: string) {
+    await this.findOneAgent(userId, organizationId, agentId); // 验证智能体存在
 
     return this.prisma.agentToolkit.findMany({
       where: { agentId },
@@ -334,7 +351,7 @@ export class AgentService {
   private async generateKnowledgeBaseSummary(agentId: string): Promise<string> {
     try {
       const knowledgeBases = await this.knowledgeBaseService.getAgentKnowledgeBasesForAI(agentId);
-      
+
       if (knowledgeBases.length === 0) {
         return '';
       }
@@ -346,12 +363,12 @@ export class AgentService {
         summary += `### ${index + 1}. ${kb.name}\n`;
         summary += `- **ID**: ${kb.id}\n`;
         summary += `- **描述**: ${kb.description || '暂无描述'}\n`;
-        
+
         // 添加元数据schema信息
         const schemaFields = Object.keys(kb.metadataSchema || {});
         if (schemaFields.length > 0) {
           summary += `- **可过滤字段**: ${schemaFields.join(', ')}\n`;
-          
+
           // 添加具体的元数据字段说明
           summary += `- **元数据字段详情**:\n`;
           schemaFields.forEach(field => {
@@ -387,7 +404,7 @@ export class AgentService {
   // 生成增强的系统提示词，包含知识库信息
   private async generateEnhancedPrompt(agentId: string, originalPrompt: string): Promise<string> {
     const knowledgeBaseSummary = await this.generateKnowledgeBaseSummary(agentId);
-    
+
     if (!knowledgeBaseSummary) {
       return originalPrompt;
     }
@@ -396,16 +413,16 @@ export class AgentService {
   }
 
   // 处理消息的方法，用于定时任务和对话服务
-  async processMessage(agentId: string, messages: Array<{ role: string; content: string }>) {
+  async processMessage(userId: string, organizationId: string | undefined, agentId: string, messages: Array<{ role: string; content: string }>) {
     // 获取智能体信息
-    const agent = await this.findOne(agentId);
+    const agent = await this.findOneAgent(userId, organizationId, agentId);
 
     // 获取智能体的工具
     const tools = await this.toolsService.getAgentTools(agentId);
 
     // 生成增强的系统提示词（包含知识库信息）
     const enhancedPrompt = await this.generateEnhancedPrompt(agentId, agent.prompt);
-    
+
     // 创建智能体实例
     const agentInstance = await this.llamaIndexService.createAgent(
       tools,

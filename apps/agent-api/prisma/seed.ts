@@ -12,8 +12,81 @@ async function main() {
   await prisma.workFlow.deleteMany();
   await prisma.tool.deleteMany();
   await prisma.toolkit.deleteMany();
+  await prisma.agentKnowledgeBase.deleteMany();
+  await prisma.knowledgeBase.deleteMany();
+  await prisma.organizationMember.deleteMany();
+  await prisma.organization.deleteMany();
+  await prisma.account.deleteMany();
+  await prisma.session.deleteMany();
+  await prisma.user.deleteMany();
 
   console.log('🧹 清理完成');
+
+  // 创建默认用户和组织（如果表存在）
+  let defaultUser: { 
+    id: string; 
+    email: string; 
+    name: string | null; 
+    createdAt: Date; 
+    updatedAt: Date; 
+    activeOrgId: string | null; 
+  };
+  let defaultOrganization: { 
+    id: string; 
+    name: string; 
+    slug: string; 
+    logo: string | null; 
+    metadata: any; 
+    createdAt: Date; 
+    updatedAt: Date; 
+  };
+  try {
+    defaultUser = await prisma.user.create({
+      data: {
+        id: 'default-user-id',
+        email: 'admin@example.com',
+        name: 'System Admin',
+      },
+    });
+
+    defaultOrganization = await prisma.organization.create({
+      data: {
+        id: 'default-org-id',
+        name: 'Default Organization',
+        slug: 'default-org',
+      },
+    });
+
+    // 创建组织成员关系
+    await prisma.organizationMember.create({
+      data: {
+        userId: defaultUser.id,
+        orgId: defaultOrganization.id,
+        role: 'OWNER',
+      },
+    });
+
+    console.log('👤 用户和组织创建完成');
+  } catch (error) {
+    console.log('⚠️ Better Auth表不存在，使用默认值');
+    defaultUser = { 
+      id: 'default-user-id',
+      email: 'default@example.com',
+      name: 'Default User',
+      createdAt: new Date(),
+      updatedAt: new Date(),
+      activeOrgId: 'default-org-id'
+    };
+    defaultOrganization = { 
+      id: 'default-org-id',
+      name: 'Default Organization',
+      slug: 'default-org',
+      logo: '',
+      metadata: {},
+      createdAt: new Date(),
+      updatedAt: new Date()
+    };
+  }
 
   // 创建工具包（与代码中定义的保持一致）
   const commonToolkit = await prisma.toolkit.create({
@@ -97,6 +170,8 @@ async function main() {
         temperature: 0.7,
         maxTokens: 1000,
       },
+      createdById: defaultUser.id,
+      organizationId: defaultOrganization.id,
     },
   });
 
@@ -109,6 +184,8 @@ async function main() {
         temperature: 0.5,
         maxTokens: 2000,
       },
+      createdById: defaultUser.id,
+      organizationId: defaultOrganization.id,
     },
   });
 
@@ -121,6 +198,8 @@ async function main() {
         temperature: 0.3,
         maxTokens: 1500,
       },
+      createdById: defaultUser.id,
+      organizationId: defaultOrganization.id,
     },
   });
 
@@ -199,6 +278,8 @@ async function main() {
     data: {
       name: 'AI邮件摘要与推送',
       description: 'AI自动摘要邮件并通过企业微信推送',
+      createdById: defaultUser.id,
+      organizationId: defaultOrganization.id,
       DSL: {
         id: 'workflowMailSummarySend',
         name: 'AI邮件摘要与推送',
@@ -251,7 +332,8 @@ async function main() {
       name: '产品知识库',
       description: '包含产品功能、使用说明和常见问题的知识库',
       vectorStoreName: 'kb_system_product',
-      createdById: 'system',
+      createdById: defaultUser.id,
+      organizationId: defaultOrganization.id,
     },
   });
 
@@ -260,7 +342,8 @@ async function main() {
       name: '法律条文知识库',
       description: '包含相关法律法规和条文的知识库',
       vectorStoreName: 'kb_system_legal',
-      createdById: 'system',
+      createdById: defaultUser.id,
+      organizationId: defaultOrganization.id,
     },
   });
 

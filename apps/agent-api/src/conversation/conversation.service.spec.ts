@@ -64,7 +64,7 @@ describe('ConversationService', () => {
 
       (prismaService.conversation.create as jest.Mock).mockResolvedValue(mockConversation as any);
 
-      const result = await service.createConversation(conversationData);
+      const result = await service.createConversation('test-user-id', 'test-org-id', conversationData);
 
       expect(prismaService.conversation.create).toHaveBeenCalledWith({
         data: {
@@ -98,10 +98,18 @@ describe('ConversationService', () => {
         createdAt: new Date(),
       };
 
+      const mockConversation = {
+        id: conversationId,
+        agentId: 'agent-123',
+        messages: [],
+        agent: { id: 'agent-123', name: 'Test Agent' },
+      };
+
+      (prismaService.conversation.findUnique as jest.Mock).mockResolvedValue(mockConversation as any);
       (prismaService.message.create as jest.Mock).mockResolvedValue(mockMessage as any);
       (prismaService.conversation.update as jest.Mock).mockResolvedValue({} as any);
 
-      const result = await service.addMessage(conversationId, messageData);
+      const result = await service.addMessage('test-user-id', 'test-org-id', conversationId, messageData);
 
       expect(prismaService.message.create).toHaveBeenCalledWith({
         data: {
@@ -148,9 +156,9 @@ describe('ConversationService', () => {
       (prismaService.message.create as jest.Mock).mockResolvedValue(mockMessage as any);
       (prismaService.conversation.update as jest.Mock).mockResolvedValue({} as any);
 
-      const result = await service.processMessage(conversationId, userMessage);
+      const result = await service.processMessage('test-user-id', 'test-org-id', conversationId, userMessage);
 
-      expect(agentService.processMessage).toHaveBeenCalledWith('agent-123', [
+      expect(agentService.processMessage).toHaveBeenCalledWith('test-user-id', 'test-org-id', 'agent-123', [
         { role: 'user', content: userMessage }
       ]);
       expect(result).toEqual({
@@ -166,7 +174,7 @@ describe('ConversationService', () => {
 
       (prismaService.conversation.findUnique as jest.Mock).mockResolvedValue(null);
 
-      await expect(service.processMessage(conversationId, userMessage))
+      await expect(service.processMessage('test-user-id', 'test-org-id', conversationId, userMessage))
         .rejects.toThrow('Conversation not found');
     });
   });
