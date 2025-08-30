@@ -1,262 +1,284 @@
-# 🤖 智能体平台 - Agent Platform
+# 🤖 Agent Platform
 
-一个功能强大的智能体管理平台，基于现代化的 Monorepo 架构构建。支持多智能体协作、工作流编排、知识库管理和工具集成的完整解决方案。
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![Node.js](https://img.shields.io/badge/Node.js-20+-green.svg)](https://nodejs.org/)
+[![TypeScript](https://img.shields.io/badge/TypeScript-5.7-blue.svg)](https://www.typescriptlang.org/)
+[![NestJS](https://img.shields.io/badge/NestJS-Latest-red.svg)](https://nestjs.com/)
+[![React](https://img.shields.io/badge/React-19-blue.svg)](https://reactjs.org/)
 
-## 📁 项目结构
+An open-source, production-ready agent management platform built with modern monorepo architecture. Create, orchestrate, and manage AI agents with workflow automation, knowledge base integration, and extensible toolkits.
 
-```
-agent-platform/
-├── apps/                          # 应用目录
-│   ├── agent-api/                 # 智能体后端 API 服务 (NestJS)
+English | [中文](README_CN.md)
+
+## ✨ Features
+
+- 🤖 **Multi-Agent Management** - Create, configure, and orchestrate multiple AI agents
+- 🔄 **Workflow Automation** - DSL-driven complex workflow execution
+- 📚 **Knowledge Base Integration** - Vector database with RAG capabilities
+- 🛠️ **Extensible Toolkit System** - Modular tools with dynamic registration
+- 🔒 **Fine-grained Permissions** - Agent-level access control for tools and knowledge
+- 🚀 **Production Ready** - Docker deployment with monitoring and scaling
+- 💻 **Modern UI** - Intuitive React interface for platform management
+- 🔧 **Developer Friendly** - Full TypeScript support with comprehensive APIs
+
+## 📁 Project Structure
+
+```text
+hackathon-starter/
+├── apps/                          # Applications
+│   ├── agent-api/                 # NestJS Backend API
 │   │   ├── src/
-│   │   │   ├── agent/             # 智能体管理模块
-│   │   │   ├── workflow/          # 工作流引擎模块
-│   │   │   ├── tool/              # 工具与工具集管理
-│   │   │   ├── knowledge-base/    # 知识库管理模块
-│   │   │   ├── llamaindex/        # LlamaIndex 集成
-│   │   │   └── prisma/            # 数据库层
-│   │   ├── prisma/                # 数据库模型与迁移
-│   │   ├── Dockerfile             # Docker 配置
-│   │   └── package.json
-│   └── agent-web/                 # 智能体前端管理界面 (React)
+│   │   │   ├── agent/             # Agent management
+│   │   │   ├── workflow/          # Workflow engine
+│   │   │   ├── tool/              # Tools & toolkits
+│   │   │   ├── knowledge-base/    # Knowledge management
+│   │   │   ├── llamaindex/        # LlamaIndex integration
+│   │   │   └── prisma/            # Database layer
+│   │   └── prisma/                # Database schema & migrations
+│   └── agent-web/                 # React Frontend
 │       ├── src/
-│       │   ├── pages/             # 页面组件
-│       │   ├── components/        # 共享组件
-│       │   ├── services/          # API 服务层
-│       │   └── types/             # TypeScript 类型定义
-│       ├── Dockerfile             # Docker 配置
-│       └── package.json
-├── packages/                      # 共享包目录
-│   ├── ui/                        # UI 组件库
-│   ├── eslint-config/             # ESLint 配置
-│   └── typescript-config/         # TypeScript 配置
-├── scripts/                       # 管理脚本
-│   ├── dev.sh                     # 开发环境启动
-│   ├── prod.sh                    # 生产环境部署
-│   ├── status.sh                  # 查看服务状态
-│   └── stop.sh                    # 停止服务
-├── docker-compose.yml             # 本地开发环境配置
-├── docker-compose.prod.yml        # 生产环境配置
-├── .env.example                   # 环境变量模板
-├── turbo.json                     # Turborepo 配置
-├── pnpm-workspace.yaml           # PNPM 工作空间配置
-└── package.json                   # 根包配置
+│       │   ├── pages/             # UI pages
+│       │   ├── components/        # Shared components
+│       │   ├── services/          # API client
+│       │   └── types/             # TypeScript definitions
+├── packages/                      # Shared packages
+│   ├── ui/                        # UI component library
+│   ├── eslint-config/             # ESLint configuration
+│   └── typescript-config/         # TypeScript configuration
+├── docker-compose.yml             # Development environment
+├── docker-compose.prod.yml        # Production configuration
+├── .env.example                   # Environment template
+├── turbo.json                     # Turborepo configuration
+├── pnpm-workspace.yaml           # PNPM workspace setup
+└── package.json                   # Root package configuration
 ```
 
-## 🛠 技术栈
+## 🛠 Tech Stack
 
-### 后端服务 (agent-api)
+### Backend (agent-api)
 
-- **框架**: NestJS (企业级 Node.js 框架)
-- **数据库**: PostgreSQL + pgvector (向量数据库扩展)
-- **ORM**: Prisma (类型安全的数据库访问)
-- **AI 集成**: LlamaIndex (AI 工作流引擎)
-- **缓存**: Redis (高性能缓存)
+- **Framework**: [NestJS](https://nestjs.com/) - Enterprise-grade Node.js framework
+- **Database**: [PostgreSQL](https://postgresql.org/) + [pgvector](https://github.com/pgvector/pgvector) - Vector database extension
+- **ORM**: [Prisma](https://prisma.io/) - Type-safe database access
+- **AI Integration**: [LlamaIndex](https://www.llamaindex.ai/) - AI workflow engine
+- **Cache**: [Redis](https://redis.io/) - High-performance caching
 
-### 前端应用 (agent-web)
+### Frontend (agent-web)
 
-- **框架**: React 19 + Vite (现代前端构建)
-- **状态管理**: React Query (服务端状态管理)
-- **UI 组件**: Radix UI + Tailwind CSS
-- **路由**: React Router (客户端路由)
+- **Framework**: [React 19](https://reactjs.org/) + [Vite](https://vitejs.dev/) - Modern build tooling
+- **State Management**: [React Query](https://tanstack.com/query) - Server state management
+- **UI Library**: [Radix UI](https://radix-ui.com/) + [Tailwind CSS](https://tailwindcss.com/)
+- **Routing**: [React Router](https://reactrouter.com/) - Client-side routing
 
-### 开发工具
+### Development & DevOps
 
-- **Monorepo**: Turborepo + PNPM Workspaces
-- **代码质量**: ESLint + Prettier + TypeScript
-- **容器化**: Docker + Docker Compose (支持热更新)
+- **Monorepo**: [Turborepo](https://turbo.build/) + [PNPM Workspaces](https://pnpm.io/workspaces)
+- **Code Quality**: ESLint + Prettier + TypeScript
+- **Containerization**: Docker + Docker Compose with hot reload
+- **Database**: PostgreSQL with pgvector extension for vector operations
 
-### 核心特性
+## 🚀 Quick Start
 
-- **智能体管理**: 创建、配置和管理多个 AI 智能体
-- **工作流编排**: DSL 驱动的复杂工作流定义与执行
-- **知识库集成**: 向量数据库支持的 RAG (检索增强生成)
-- **工具系统**: 模块化工具集，支持动态扩展
-- **多智能体协作**: 支持智能体间的协调与通信
+### Prerequisites
 
-## 🚀 快速开始
+- [Node.js](https://nodejs.org/) >= 20
+- [Docker](https://docker.com/) & Docker Compose
+- [PNPM](https://pnpm.io/) >= 8
 
-### 环境要求
+### Installation
 
-- Node.js >= 20
-- Docker & Docker Compose
-- PNPM >= 8
+1. **Clone the repository**
 
-### 1. 克隆项目
+   ```bash
+   git clone https://github.com/your-username/hackathon-starter.git
+   cd hackathon-starter
+   ```
 
-```bash
-git clone <your-repo-url>
-cd agent-platform
-```
+2. **Install dependencies**
 
-### 2. 安装依赖
+   ```bash
+   pnpm install
+   ```
 
-```bash
-pnpm install
-```
+3. **Set up environment**
 
-### 3. 给脚本添加执行权限
+   ```bash
+   # Copy environment template
+   cp .env.example .env
+   ```
 
-```bash
-chmod +x scripts/*.sh
-```
+4. **Start development environment**
 
-### 4. 启动开发环境
+   ```bash
+   # Using Docker (recommended)
+   docker compose up --build -d
 
-```bash
-# 使用docker-compose启动（推荐）
-./scripts/dev.sh
+   # Or locally (requires database setup)
+   pnpm dev
+   ```
 
-# 或者使用 pnpm 启动（需要先起数据库）
-pnpm dev
-```
+5. **Access the platform**
+   - Frontend: <http://localhost:5173>
+   - API: <http://localhost:3001>
+   - API Docs: <http://localhost:3001/api>
 
-## 🌐 服务访问地址
+## 💻 Development Commands
 
-启动成功后，您可以通过以下地址访问各个服务：
-
-| 服务 | 本地地址 | 端口 | 描述 |
-|------|----------|------|------|
-| **智能体管理界面** | http://localhost:5173 | 5173 | React 前端管理平台 |
-| **智能体 API** | http://localhost:3001 | 3001 | NestJS 后端服务 |
-| **PostgreSQL** | localhost:5432 | 5432 | 主数据库 (含 pgvector) |
-| **Redis** | localhost:6379 | 6379 | 缓存服务 |
-
-## 📜 常用命令
-
-### 开发环境管理
+### Environment Management
 
 ```bash
-# 启动开发环境（支持热更新）
-./scripts/dev.sh
+# Start development environment (with hot reload)
+docker compose up --build -d
 
-# 查看服务状态
-./scripts/status.sh
+# Check service status
+docker compose ps
 
-# 停止服务
-./scripts/stop.sh
+# Stop all services
+docker compose down
 
-# 启动特定服务
+# Start specific service
 docker compose up [service-name]
 
-# 停止特定服务
-docker compose stop [service-name]
-
-# 查看日志
+# View service logs
 docker compose logs -f [service-name]
 
-# 重建特定服务
+# Rebuild specific service
 docker compose up --build [service-name]
 ```
 
-### Monorepo 开发
+### Monorepo Development
 
 ```bash
-# 在根目录执行所有应用的命令
-pnpm run dev          # 启动所有应用
-pnpm run build        # 构建所有应用
-pnpm run lint         # 检查所有应用
+# Root level commands (all apps)
+pnpm dev              # Start all applications
+pnpm build            # Build all applications
+pnpm lint             # Lint all applications
+pnpm format           # Format code with Prettier
 
-# 针对特定应用执行命令
-pnpm --filter agent-api run dev
-pnpm --filter agent-web run build
-pnpm --filter agent-web run lint
+# Application-specific commands
+pnpm --filter agent-api dev      # Start API in watch mode
+pnpm --filter agent-api test     # Run unit tests
+pnpm --filter agent-api typecheck # Type checking
+pnpm --filter agent-web dev      # Start web app
+pnpm --filter agent-web build    # Build web application
 
-# 添加依赖到特定应用
+# Add dependencies
 pnpm --filter agent-api add @llamaindex/core
 pnpm --filter agent-web add @tanstack/react-query
 ```
 
-### 数据库管理
+### Database Management
 
 ```bash
-# 进入 agent-api 容器
-docker compose exec agent-api sh
+# Database operations (from root)
+pnpm --filter agent-api db:generate    # Generate Prisma client
+pnpm --filter agent-api db:migrate     # Run migrations
+pnpm --filter agent-api db:push        # Push schema changes
+pnpm --filter agent-api db:studio      # Open Prisma Studio
+pnpm --filter agent-api db:seed        # Seed database
+pnpm --filter agent-api db:reset       # Reset database
 
-# 在容器内执行 Prisma 命令
-cd apps/agent-api
-pnpm run db:generate     # 生成客户端
-pnpm run db:migrate      # 运行迁移
-pnpm run db:push         # 推送模式更改
-pnpm run db:studio       # 打开 Prisma Studio
+# Connect to database directly
+docker compose exec postgres psql -U postgres -d hackathon
 ```
 
-## 🏭 生产环境部署
+## 🚀 Production Deployment
 
-
-### 1. 部署到生产环境
+### Deploy to Production
 
 ```bash
-# 使用脚本部署
-./scripts/prod.sh
-
-# 或手动部署
+# Production deployment
 docker compose -f docker-compose.prod.yml up --build -d
 ```
 
-### 2. 生产环境管理
+### Production Management
 
 ```bash
-# 查看生产环境状态
+# Check production status
 docker compose -f docker-compose.prod.yml ps
 
-# 查看生产环境日志
+# View production logs
 docker compose -f docker-compose.prod.yml logs -f
 
-# 停止生产环境
+# Stop production environment
 docker compose -f docker-compose.prod.yml down
 
-# 更新服务
+# Update services
 docker compose -f docker-compose.prod.yml up --build -d [service-name]
 ```
 
-## 🔥 热更新功能
+## 🔥 Hot Reload Development
 
-### 文件同步 (sync)
+The development environment supports automatic hot reloading:
 
-- 源代码变更自动同步到容器
-- 支持的路径：`src/`、`app/`、`packages/`
-
-### 自动重建 (rebuild)
-
-- `package.json` 变更触发容器重新构建
-- 新增/删除依赖时自动重建
-
-### 使用方法
+- **File Sync**: Source code changes automatically sync to containers
+- **Auto Rebuild**: `package.json` changes trigger container rebuilds
+- **Supported Paths**: `src/`, `app/`, `packages/`
 
 ```bash
-./scripts/dev.sh
+# Start with hot reload enabled
+docker compose up --build -d
 ```
 
-## 🌟 平台功能
+## 📊 API Documentation
 
-### 智能体管理
-- **智能体创建**: 支持自定义 prompt、配置参数和工具集成
-- **智能体编排**: 可视化配置智能体之间的协作关系
-- **智能体监控**: 实时监控智能体运行状态和性能指标
+### Core Modules
 
-### 工作流引擎
-- **DSL 定义**: 使用 JSON DSL 定义复杂的工作流逻辑
-- **多智能体协作**: 支持智能体间的消息传递和状态同步
-- **条件分支**: 支持基于条件的流程控制和决策节点
-- **错误处理**: 内置错误恢复和重试机制
+#### Agent Management
 
-### 知识库系统
-- **向量存储**: 基于 pgvector 的高性能向量数据库
-- **文件管理**: 支持多种文档格式的上传和处理
-- **RAG 集成**: 检索增强生成，提升智能体回答质量
-- **知识检索**: 语义搜索和相似度匹配
+- `GET /agents` - List all agents
+- `POST /agents` - Create new agent
+- `PUT /agents/:id` - Update agent configuration
+- `DELETE /agents/:id` - Delete agent
 
-### 工具生态
-- **工具注册**: 动态注册和管理外部工具
-- **工具集成**: 支持 REST API、数据库、文件系统等工具
-- **工具链**: 构建复杂的工具调用链
-- **权限控制**: 细粒度的工具访问权限管理
+#### Workflow Engine
+
+- `GET /workflows` - List workflows
+- `POST /workflows` - Create workflow with DSL
+- `POST /workflows/:id/execute` - Execute workflow
+- `GET /workflows/:id/status` - Get execution status
+
+#### Knowledge Base
+
+- `GET /knowledge-bases` - List knowledge bases
+- `POST /knowledge-bases` - Create knowledge base
+- `POST /knowledge-bases/:id/files` - Upload files
+- `POST /knowledge-bases/:id/query` - Query knowledge base
+
+#### Toolkits
+
+- `GET /toolkits` - List available toolkits
+- `POST /toolkits/register` - Register new toolkit
+- `GET /tools` - List individual tools
+
+### Authentication
+
+The API uses session-based authentication. Include session cookies in requests or use API keys for programmatic access.
+
+### Response Format
+
+All API responses follow a consistent format:
+
+```typescript
+interface DataResponse<T> {
+  success: true;
+  data: T;
+  message?: string;
+  timestamp: string;
+}
+
+interface ErrorResponse {
+  success: false;
+  error: string;
+  timestamp: string;
+}
+```
 
 ## 🏗️ 系统架构
 
 ### 后端架构 (agent-api)
-```
+
+```mermaid
 ┌─────────────────┐  ┌─────────────────┐  ┌─────────────────┐
 │   Agent Module  │  │ Workflow Module │  │Knowledge Module │
 │                 │  │                 │  │                 │
@@ -284,7 +306,8 @@ docker compose -f docker-compose.prod.yml up --build -d [service-name]
 ```
 
 ### 前端架构 (agent-web)
-```
+
+```mermaid
 ┌─────────────────────────────────────────────────────────────┐
 │                    React Application                        │
 ├─────────────────┬─────────────────┬─────────────────────────┤
@@ -298,119 +321,201 @@ docker compose -f docker-compose.prod.yml up --build -d [service-name]
 └─────────────────┴─────────────────┴─────────────────────────┘
 ```
 
-## 🛡️ 最佳实践
+## 🔧 Architecture Overview
 
-### 智能体设计
+### System Architecture
 
-- **明确角色定义**: 为每个智能体定义清晰的职责和边界
-- **提示词工程**: 编写高质量的 prompt，包含上下文和约束条件
-- **工具集成**: 合理选择和配置工具，避免功能重叠
-- **错误处理**: 设计智能体的异常处理和降级策略
-
-### 工作流设计
-
-- **模块化设计**: 将复杂流程拆分为可复用的子流程
-- **状态管理**: 明确定义工作流各阶段的状态和转换条件
-- **并发控制**: 合理设置并发执行的智能体数量
-- **监控告警**: 设置关键节点的监控和告警机制
-
-### 知识库管理
-
-- **数据质量**: 确保知识库内容的准确性和时效性
-- **向量优化**: 选择合适的 embedding 模型和相似度算法
-- **权限分级**: 根据敏感程度设置不同的访问权限
-- **定期维护**: 建立知识库的更新和清理机制
-
-### 系统运维
-
-- **资源监控**: 监控 CPU、内存、存储等系统资源使用情况
-- **性能优化**: 定期分析慢查询和瓶颈点，进行性能调优
-- **备份策略**: 建立完善的数据备份和恢复机制
-- **安全防护**: 实施访问控制、数据加密和安全审计
-
-## 🔧 故障排除
-
-### 常见问题
-
-#### 1. 端口冲突
-
-```bash
-# 查看端口占用
-lsof -i :3000
-
-# 修改 docker-compose.yml 中的端口映射
-ports:
-  - "3001:3000"  # 将本地端口改为 3001
+```text
+┌─────────────────────────────────────────────────────────────┐
+│                    React Frontend (agent-web)                    │
+│   Dashboard • Agents • Workflows • Knowledge Base • Toolkits   │
+├─────────────────────────────────────────────────────────────┤
+│                     NestJS API (agent-api)                      │
+├────────────────┬────────────────┬───────────────────────────────┤
+│  Agent Module   │ Workflow Module │   Knowledge Base Module    │
+│                │                 │                           │
+│ • Management    │ • DSL Parsing   │ • Vector Storage         │
+│ • Configuration │ • Execution     │ • File Processing        │
+│ • Monitoring    │ • State Mgmt   │ • Semantic Search        │
+├────────────────┴────────────────┴───────────────────────────────┤
+│                         Tools Module                           │
+│        Tool Registration • Dynamic Loading • Permission Control       │
+├─────────────────────────────────────────────────────────────┤
+│                       Data Layer                              │
+│     PostgreSQL + pgvector • Redis Cache • Prisma ORM             │
+└─────────────────────────────────────────────────────────────┘
 ```
 
-#### 2. 容器启动失败
+### Key Design Principles
+
+- **Modular Architecture**: Each module has clear responsibilities and boundaries
+- **Type Safety**: Full TypeScript coverage with Prisma-generated types
+- **Permission System**: Fine-grained access control for agents, tools, and knowledge bases
+- **Extensibility**: Plugin-based toolkit system for easy integration
+- **Performance**: Optimized with caching, connection pooling, and vector indexing
+
+## 🔧 Troubleshooting
+
+### Common Issues
+
+#### Port Conflicts
 
 ```bash
-# 查看详细日志
+# Check port usage
+lsof -i :3000
+
+# Modify port mapping in docker-compose.yml
+ports:
+  - "3001:3000"  # Change local port to 3001
+```
+
+#### Container Startup Failures
+
+```bash
+# View detailed logs
 docker compose logs [service-name] --tail 50 -f
 
-# 重建镜像
+# Rebuild images
 docker compose build --no-cache [service-name]
 
-# 清理 Docker 缓存
+# Clean Docker cache
 docker system prune -a
 ```
 
-#### 3. 数据库连接问题
+#### Database Connection Issues
 
 ```bash
-# 检查数据库是否启动
+# Check database status
 docker compose ps postgres
 
-# 测试数据库连接
+# Test database connection
 docker compose exec postgres psql -U postgres -d hackathon
 ```
 
-#### 4. 热更新不工作
+#### Hot Reload Not Working
 
 ```bash
+# Enable file watching
 docker-compose watch
 
-# 检查文件权限
+# Check file permissions
 ls -la apps/your-app/src/
 ```
 
-### 清理命令
+### Cleanup Commands
 
 ```bash
-# 停止并删除所有容器
+# Stop and remove all containers
 docker compose down
 
-# 删除所有相关数据
+# Remove all data volumes
 docker compose down -v
 
-# 清理 Docker 系统
+# Clean Docker system
 docker system prune -a
 ```
 
-## 🤝 贡献指南
+## 🤝 Contributing
 
-1. Fork 项目
-2. 创建功能分支 (`git checkout -b feature/amazing-feature`)
-3. 提交更改 (`git commit -m 'Add some amazing feature'`)
-4. 推送到分支 (`git push origin feature/amazing-feature`)
-5. 开启 Pull Request
+We welcome contributions! Please follow these steps:
 
-## 📄 许可证
+### Development Workflow
 
-本项目采用 MIT 许可证 - 查看 [LICENSE](LICENSE) 文件了解详情。
+1. **Fork the repository**
+2. **Create a feature branch**
 
-agent-api agent-web 暂不采用 MIT 许可证，后续将移植到单独的仓库，规划采用主流工作流框架相同的许可方式。
+   ```bash
+   git checkout -b feature/amazing-feature
+   ```
 
-## 🙋‍♂️ 支持
+3. **Make your changes**
+   - Follow existing code style and conventions
+   - Add tests for new functionality
+   - Update documentation if needed
+4. **Test your changes**
 
-如果您在使用过程中遇到问题：
+   ```bash
+   pnpm --filter agent-api test
+   pnpm --filter agent-api typecheck
+   pnpm --filter agent-api lint
+   ```
 
-1. 查看本文档的故障排除部分
-2. 搜索已有的 Issues
-3. 创建新的 Issue 描述问题
-4. 联系项目维护者
+5. **Commit your changes**
+
+   ```bash
+   git commit -m 'feat: add amazing feature'
+   ```
+
+6. **Push to your fork**
+
+   ```bash
+   git push origin feature/amazing-feature
+   ```
+
+7. **Open a Pull Request**
+
+### Code Style Guidelines
+
+- Follow existing TypeScript and React patterns
+- Use meaningful variable and function names
+- Add JSDoc comments for public APIs
+- Keep functions small and focused
+- Write comprehensive tests
+
+### Commit Convention
+
+We use [Conventional Commits](https://conventionalcommits.org/):
+
+- `feat:` - New feature
+- `fix:` - Bug fix
+- `docs:` - Documentation changes
+- `style:` - Code style changes
+- `refactor:` - Code refactoring
+- `test:` - Test updates
+- `chore:` - Build process or auxiliary tool changes
+
+## 📄 License
+
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+
+### Open Source
+
+This is an open-source project under the MIT license. You are free to:
+
+- Use the software for any purpose
+- Modify and distribute the software
+- Include in proprietary software
+- Sell copies of the software
+
+The only requirement is to include the original copyright notice and license text.
+
+## 📞 Support & Community
+
+### Getting Help
+
+If you encounter issues:
+
+1. Check the [troubleshooting section](#-troubleshooting)
+2. Search [existing issues](https://github.com/your-username/hackathon-starter/issues)
+3. Create a [new issue](https://github.com/your-username/hackathon-starter/issues/new) with:
+   - Clear description of the problem
+   - Steps to reproduce
+   - Environment details
+   - Error logs if applicable
+
+### Resources
+
+- 📚 [Documentation](https://github.com/your-username/hackathon-starter/wiki)
+- 📊 [API Reference](http://localhost:3001/api) (when running locally)
+- 🐛 [Issue Tracker](https://github.com/your-username/hackathon-starter/issues)
+- 💬 [Discussions](https://github.com/your-username/hackathon-starter/discussions)
 
 ---
 
-**构建下一代智能体平台，让 AI 协作更简单！** 🤖✨
+**Building the next generation of AI agent platforms – making AI collaboration simple and powerful!** 🤖✨
+
+## ⭐ Star History
+
+If this project helped you, please consider giving it a star! 🌟
+
+[![Star History Chart](https://api.star-history.com/svg?repos=your-username/hackathon-starter&type=Date)](https://star-history.com/#your-username/hackathon-starter&Date)

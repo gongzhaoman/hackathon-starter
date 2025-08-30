@@ -1,95 +1,136 @@
-# CLAUDE.md
+# CLAUDE.md - 智能体平台开发指南
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+本文件为 Claude Code (claude.ai/code) 在此代码仓库中工作时提供开发流程指导。
 
-## Development Commands
+## ⚡ 标准开发流程（重要）
 
-### Root Level Commands (Turborepo)
+**每次进行代码修改时必须严格按照以下顺序执行：**
 
-- `pnpm dev` - Start all applications in development mode
-- `pnpm build` - Build all applications
-- `pnpm lint` - Lint all applications
-- `pnpm format` - Format code with Prettier
+### 1. 开发环境准备
 
-### Per-Application Commands
+```bash
+# 启动开发环境
+docker compose up --build -d
 
-- `pnpm --filter agent-api <command>` - Run command in agent-api
-- `pnpm --filter agent-web <command>` - Run command in agent-web
+# 检查服务状态
+docker compose ps
+```
 
-### Agent API (NestJS) Commands
+### 2. 代码修改流程
 
-- `pnpm --filter agent-api dev` - Start API in watch mode
-- `pnpm --filter agent-api build` - Build the API
-- `pnpm --filter agent-api test` - Run unit tests
-- `pnpm --filter agent-api test:e2e` - Run end-to-end tests
-- `pnpm --filter agent-api typecheck` - Type checking
-- `pnpm --filter agent-api lint` - Lint with auto-fix
+1. **修改代码** - 进行必要的功能开发或bug修复
+2. **类型检查** - `pnpm --filter agent-api typecheck`
+3. **运行测试** - `pnpm --filter agent-api test`（必须通过）
+4. **代码检查** - `pnpm --filter agent-api lint`
+5. **手动验证** - 确认功能正常工作
 
-### Database Commands (from agent-api directory)
+### 3. 文档更新流程
 
-- `pnpm --filter agent-api db:generate` - Generate Prisma client
-- `pnpm --filter agent-api db:migrate` - Run database migrations
-- `pnpm --filter agent-api db:push` - Push schema changes
-- `pnpm --filter agent-api db:studio` - Open Prisma Studio
-- `pnpm --filter agent-api db:seed` - Seed database
-- `pnpm --filter agent-api db:reset` - Reset and reseed database
+**完成代码开发后，必须按顺序更新以下文档：**
 
-### Agent Web (React + Vite) Commands
+1. **更新英文README** - 如有新功能或命令变更
+2. **更新中文README** - 保持与英文版本同步
+3. **更新docs目录** - 更新相关技术文档（架构指南、测试指南等）
+4. **更新CLAUDE.md** - 如有开发流程或命令变更
 
-- `pnpm --filter agent-web dev` - Start web app in development
-- `pnpm --filter agent-web build` - Build web application
-- `pnpm --filter agent-web typecheck` - Type checking
-- `pnpm --filter agent-web lint` - Lint with ESLint
+### 4. 提交前检查
 
-### Docker Development
+```bash
+# 最终检查（所有命令必须成功）
+pnpm --filter agent-api typecheck
+pnpm --filter agent-api test
+pnpm --filter agent-api lint
+```
 
-- `./scripts/dev.sh` - Start full development environment with Docker
-- `./scripts/status.sh` - Check service status
-- `./scripts/stop.sh` - Stop all services
-- `docker compose logs -f <service>` - View service logs
+## 📋 开发命令参考
 
-## Architecture Overview
+### 根目录命令 (Turborepo)
 
-### Monorepo Structure
+- `pnpm dev` - 启动所有应用的开发模式
+- `pnpm build` - 构建所有应用
+- `pnpm lint` - 检查所有应用代码
+- `pnpm format` - 使用Prettier格式化代码
 
-This is a Turborepo-based monorepo with the following structure:
+### 应用特定命令
 
-- **apps/agent-api**: NestJS backend API with Prisma ORM
-- **apps/agent-web**: React frontend with Vite
-- **packages/**: Shared packages (UI components, configs)
+- `pnpm --filter agent-api <command>` - 在agent-api中运行命令
+- `pnpm --filter agent-web <command>` - 在agent-web中运行命令
 
-### Agent API (Backend)
+### Agent API (NestJS) 命令
 
-Built with NestJS framework following modular architecture:
+- `pnpm --filter agent-api dev` - 启动API监听模式
+- `pnpm --filter agent-api build` - 构建API
+- `pnpm --filter agent-api test` - 运行单元测试
+- `pnpm --filter agent-api test:e2e` - 运行端到端测试
+- `pnpm --filter agent-api typecheck` - 类型检查
+- `pnpm --filter agent-api lint` - 代码检查并自动修复
 
-**Core Modules:**
+### 数据库命令
 
-- **AgentModule** (`src/agent/`): Manages AI agents and their configurations
-- **WorkflowModule** (`src/workflow/`): Handles workflow execution with DSL schema
-- **ToolsModule** (`src/tool/`): Manages toolkits and individual tools
-- **KnowledgeBaseModule** (`src/knowledge-base/`): Vector database integration for RAG
-- **LlamaIndexModule** (`src/llamaindex/`): LlamaIndex integration for AI workflows
-- **PrismaModule** (`src/prisma/`): Database layer with PostgreSQL + pgvector
+- `pnpm --filter agent-api db:generate` - 生成Prisma客户端
+- `pnpm --filter agent-api db:migrate` - 运行数据库迁移
+- `pnpm --filter agent-api db:push` - 推送模式变更
+- `pnpm --filter agent-api db:studio` - 打开Prisma Studio
+- `pnpm --filter agent-api db:seed` - 初始化数据库
+- `pnpm --filter agent-api db:reset` - 重置并重新初始化数据库
 
-**Key Features:**
+### Agent Web (React + Vite) 命令
 
-- Agent-based architecture with configurable toolkits
-- Workflow DSL for complex multi-agent orchestration
-- Knowledge base management with vector storage
-- Tool explorer and dynamic toolkit registration
-- Unified API response format with ResponseBuilder
-- Global response interceptor for HTTP standardization
-- Permission-based access control for knowledge bases
+- `pnpm --filter agent-web dev` - 启动Web应用开发模式
+- `pnpm --filter agent-web build` - 构建Web应用
+- `pnpm --filter agent-web typecheck` - 类型检查
+- `pnpm --filter agent-web lint` - ESLint代码检查
 
-**API Response Architecture:**
+### Docker 开发命令
 
-The API uses a layered response architecture:
+- `docker compose up --build -d` - 启动完整的Docker开发环境
+- `docker compose ps` - 检查服务状态
+- `docker compose down` - 停止所有服务
+- `docker compose logs -f <service>` - 查看服务日志
 
-1. **Service Layer**: Returns raw data objects
-2. **Controller Layer**: Wraps data using `ResponseBuilder` utilities
-3. **Response Interceptor**: Handles HTTP status codes and final formatting
+## 🏗️ 系统架构概览
 
-All API responses follow the standard format:
+### Monorepo 架构
+
+基于 Turborepo 的 Monorepo 架构，包含以下结构：
+
+- **apps/agent-api**: 基于 Prisma ORM 的 NestJS 后端 API
+- **apps/agent-web**: 基于 Vite 的 React 前端
+- **packages/**: 共享包（UI组件、配置）
+
+### Agent API (后端)
+
+使用 NestJS 框架构建的模块化架构：
+
+**核心模块：**
+
+- **AgentModule** (`src/agent/`): 管理AI智能体及其配置
+- **WorkflowModule** (`src/workflow/`): 处理基于DSL的工作流执行
+- **ToolsModule** (`src/tool/`): 管理工具集和单个工具
+- **KnowledgeBaseModule** (`src/knowledge-base/`): RAG向量数据库集成
+- **LlamaIndexModule** (`src/llamaindex/`): LlamaIndex AI工作流集成
+- **PrismaModule** (`src/prisma/`): PostgreSQL + pgvector 数据库层
+
+**核心功能：**
+
+- 基于智能体的架构，支持可配置工具集
+- 复杂多智能体编排的工作流DSL
+- 基于向量存储的知识库管理
+- 工具探索和动态工具集注册
+- 使用 ResponseBuilder 的统一 API 响应格式
+- HTTP标准化的全局响应拦截器
+- 基于权限的知识库访问控制
+
+**API 响应架构：**
+
+API 使用分层响应架构：
+
+1. **服务层**: 返回原始数据对象
+2. **控制器层**: 使用 `ResponseBuilder` 工具包装数据
+3. **响应拦截器**: 处理HTTP状态码和最终格式化
+
+所有 API 响应遵循标准格式：
+
 ```typescript
 interface DataResponse<T> {
   success: true;
@@ -99,27 +140,28 @@ interface DataResponse<T> {
 }
 ```
 
-### Database Schema
+### 数据库架构
 
-Uses PostgreSQL with pgvector extension:
+使用 PostgreSQL 配合 pgvector 扩展：
 
-- **Agent**: Core agent configuration with prompts and options
-- **Toolkit/Tool**: Modular tool system with JSON schema validation
-- **Workflow**: DSL-based workflow definitions with agent associations
-- **KnowledgeBase**: Vector storage for RAG with file management
-- **AgentToolkit/AgentTool/AgentKnowledgeBase**: Many-to-many relationship tables
+- **Agent**: 核心智能体配置，包含提示词和选项
+- **Toolkit/Tool**: 模块化工具系统，支持JSON schema验证
+- **Workflow**: 基于DSL的工作流定义，关联智能体
+- **KnowledgeBase**: RAG向量存储，支持文件管理
+- **AgentToolkit/AgentTool/AgentKnowledgeBase**: 多对多关系表
 
-**Permission Architecture:**
+**权限架构：**
 
-The system implements fine-grained access control:
+系统实现细粒度访问控制：
 
-1. **Agent-Toolkit Relationships**: Configured via `AgentToolkit` with settings
-2. **Agent-Knowledge Base Access**: Managed through `AgentKnowledgeBase` with unique constraints
-3. **Tool Permissions**: Tools inherit agent permissions through toolkit associations
+1. **智能体-工具集关系**: 通过 `AgentToolkit` 配置设置
+2. **智能体-知识库访问**: 通过 `AgentKnowledgeBase` 管理，具有唯一约束
+3. **工具权限**: 工具通过工具集关联继承智能体权限
 
-**Knowledge Base Access Control:**
+**知识库访问控制：**
+
 ```typescript
-// Permission check uses database unique constraint for efficiency
+// 权限检查使用数据库唯一约束提高效率
 const hasAccess = await prisma.agentKnowledgeBase.findUnique({
   where: {
     agentId_knowledgeBaseId: { agentId, knowledgeBaseId }
@@ -127,91 +169,96 @@ const hasAccess = await prisma.agentKnowledgeBase.findUnique({
 });
 ```
 
-### Agent Web (Frontend)
+### Agent Web (前端)
 
-React application with:
+React 应用包含：
 
-- **React Query**: Server state management
-- **React Router**: Client-side routing
-- **Tailwind CSS**: Styling framework
-- **Radix UI**: Component primitives
+- **React Query**: 服务端状态管理
+- **React Router**: 客户端路由
+- **Tailwind CSS**: 样式框架
+- **Radix UI**: 组件原语
 
-**Key Pages:**
+**核心页面：**
 
-- `Dashboard.tsx`: Main overview
-- `Agents.tsx`: Agent management
-- `Workflows.tsx`: Workflow builder/runner
-- `KnowledgeBases.tsx`: Knowledge base management
-- `Toolkits.tsx`: Tool management
-- `AgentChat.tsx`: Chat interface
+- `Dashboard.tsx`: 主概览页面
+- `Agents.tsx`: 智能体管理
+- `Workflows.tsx`: 工作流构建器/运行器
+- `KnowledgeBases.tsx`: 知识库管理
+- `Toolkits.tsx`: 工具管理
+- `AgentChat.tsx`: 聊天界面
 
-## Development Environment
+## 🔧 开发环境
 
-### Prerequisites
+### 环境要求
 
 - Node.js >= 20
-- PNPM (package manager)
+- PNPM (包管理器)
 - Docker & Docker Compose
 
-### Environment Setup
+### 环境配置
 
-1. Use `./scripts/dev.sh` for containerized development (recommended)
-2. Services run on:
+1. 使用 `docker compose up --build -d` 进行容器化开发（推荐）
+2. 服务运行端口：
    - Agent API: <http://localhost:3001>
    - Agent Web: <http://localhost:5173>
    - PostgreSQL: localhost:5432
    - Redis: localhost:6379
 
-### Testing Strategy
+### 测试策略
 
-**Test Organization:**
-- **Service tests** (`*.service.spec.ts`): Test business logic and data operations
-- **Controller tests** (`*.controller.spec.ts`): Test HTTP layer and response formatting
-- **Integration tests** (`apps/agent-api/test/`): Test complete request/response cycles
-- **End-to-end tests**: Test full user workflows
+**测试组织：**
 
-**Running Tests:**
-- `pnpm --filter agent-api test` - Run all unit tests
-- `pnpm --filter agent-api test:e2e` - Run end-to-end tests
-- `pnpm --filter agent-api test <file>` - Run specific test file
-- `pnpm --filter agent-api test:cov` - Run tests with coverage
+- **服务测试** (`*.service.spec.ts`): 测试业务逻辑和数据操作
+- **控制器测试** (`*.controller.spec.ts`): 测试HTTP层和响应格式化
+- **集成测试** (`apps/agent-api/test/`): 测试完整的请求/响应周期
+- **端到端测试**: 测试完整用户工作流
 
-**Testing Best Practices:**
+**运行测试：**
 
-1. **Service Layer Tests**:
+- `pnpm --filter agent-api test` - 运行所有单元测试
+- `pnpm --filter agent-api test:e2e` - 运行端到端测试
+- `pnpm --filter agent-api test <file>` - 运行特定测试文件
+- `pnpm --filter agent-api test:cov` - 运行测试并生成覆盖率报告
+
+**测试最佳实践：**
+
+1. **服务层测试**:
+
    ```typescript
-   // Test raw data returns
+   // 测试原始数据返回
    expect(result).toEqual(expectedData);
    ```
 
-2. **Controller Layer Tests**:
+2. **控制器层测试**:
+
    ```typescript
-   // Test ResponseBuilder wrapped responses
+   // 测试 ResponseBuilder 包装的响应
    expect((result as DataResponse<any>).data).toEqual(expectedData);
    expect(result.success).toBe(true);
    ```
 
-3. **Mock Setup**:
-   - Mock external dependencies (Prisma, HTTP clients)
-   - Use type-safe mocks with Jest
-   - Reset mocks between tests
+3. **Mock 设置**:
+   - Mock 外部依赖（Prisma、HTTP客户端）
+   - 使用 Jest 的类型安全 Mock
+   - 在测试间重置 Mock
 
-4. **Permission Testing**:
-   - Test authorized and unauthorized access scenarios
-   - Verify error responses match expected format
+4. **权限测试**:
+   - 测试授权和未授权访问场景
+   - 验证错误响应匹配预期格式
 
-### Code Quality
+### 代码质量
 
-- ESLint configuration shared via `@workspace/eslint-config`
-- TypeScript configuration shared via `@workspace/typescript-config`
-- Prettier for code formatting
-- Always run `typecheck` and `lint` before commits
+- 通过 `@workspace/eslint-config` 共享 ESLint 配置
+- 通过 `@workspace/typescript-config` 共享 TypeScript 配置
+- 使用 Prettier 进行代码格式化
+- 提交前必须运行 `typecheck` 和 `lint`
 
-## Toolkit Development Guide
+## 🛠️ 工具集开发指南
 
-### Creating New Toolkits
+### 创建新工具集
 
-1. **Extend BaseToolkit**:
+1. **继承 BaseToolkit**:
+
    ```typescript
    @toolkitId('my-toolkit-01')
    export class MyToolkit extends BaseToolkit {
@@ -222,34 +269,35 @@ React application with:
    }
    ```
 
-2. **Implement Required Methods**:
+2. **实现必需方法**:
+
    ```typescript
    validateSettings(): void {
-     // Validate toolkit settings
+     // 验证工具集设置
    }
 
    protected async initTools(): Promise<void> {
-     // Initialize tools asynchronously
+     // 异步初始化工具
      const FunctionTool = await this.llamaindexService.getFunctionTool();
-     this.tools = [/* create tools */];
+     this.tools = [/* 创建工具 */];
    }
    ```
 
-3. **Permission-Aware Toolkits**:
-   - Use `this.settings.agentId` for agent-specific operations
-   - Never expose `agentId` in tool parameters
-   - Validate permissions at the service layer
+3. **权限感知工具集**:
+   - 使用 `this.settings.agentId` 进行智能体特定操作
+   - 永远不要在工具参数中暴露 `agentId`
+   - 在服务层验证权限
 
-### Knowledge Base Toolkit Architecture
+### 知识库工具集架构
 
-The knowledge base toolkit demonstrates secure permission handling:
+知识库工具集展示了安全权限处理：
 
-1. **Settings Configuration**: `agentId` stored in toolkit settings
-2. **Service-Level Permission Check**: Uses efficient database query
-3. **Error Handling**: Returns appropriate forbidden exceptions
+1. **设置配置**: `agentId` 存储在工具集设置中
+2. **服务层权限检查**: 使用高效的数据库查询
+3. **错误处理**: 返回适当的禁止访问异常
 
 ```typescript
-// In KnowledgeBaseService.query()
+// 在 KnowledgeBaseService.query() 中
 if (agentId) {
   const hasAccess = await this.prisma.agentKnowledgeBase.findUnique({
     where: { agentId_knowledgeBaseId: { agentId, knowledgeBaseId } }
@@ -260,135 +308,144 @@ if (agentId) {
 }
 ```
 
-## Development Workflow
+## 📝 开发工作流
 
-### Before Starting Development
+### 开始开发前
 
-1. **Environment Setup**:
+1. **环境设置**:
+
    ```bash
    pnpm install
    pnpm --filter agent-api db:generate
    pnpm --filter agent-api db:push
    ```
 
-2. **Start Development**:
+2. **启动开发**:
+
    ```bash
-   ./scripts/dev.sh  # Full containerized environment
-   # OR
-   pnpm dev  # Local development
+   docker compose up --build -d  # 完整容器化环境
+   # 或
+   pnpm dev  # 本地开发
    ```
 
-### Code Changes Workflow
+### 代码变更工作流
 
-1. **Make Changes**: Edit source files
-2. **Type Check**: `pnpm --filter agent-api typecheck`
-3. **Run Tests**: `pnpm --filter agent-api test`
-4. **Lint Code**: `pnpm --filter agent-api lint`
-5. **Test Manually**: Verify changes work as expected
+1. **进行修改**: 编辑源文件
+2. **类型检查**: `pnpm --filter agent-api typecheck`
+3. **运行测试**: `pnpm --filter agent-api test`
+4. **代码检查**: `pnpm --filter agent-api lint`
+5. **手动测试**: 验证更改按预期工作
 
-### Adding New Features
+### 添加新功能
 
-1. **Database Changes**:
-   - Update `schema.prisma`
-   - Run `pnpm --filter agent-api db:generate`
-   - Run `pnpm --filter agent-api db:push`
+1. **数据库变更**:
+   - 更新 `schema.prisma`
+   - 运行 `pnpm --filter agent-api db:generate`
+   - 运行 `pnpm --filter agent-api db:push`
 
-2. **API Changes**:
-   - Update service layer first
-   - Add controller endpoints
-   - Update response types
-   - Add comprehensive tests
+2. **API 变更**:
+   - 首先更新服务层
+   - 添加控制器端点
+   - 更新响应类型
+   - 添加全面的测试
 
-3. **Frontend Integration**:
-   - Update API client
-   - Add new UI components
-   - Test end-to-end workflows
+3. **前端集成**:
+   - 更新 API 客户端
+   - 添加新的 UI 组件
+   - 测试端到端工作流
 
-## Security Best Practices
+## 🛡️ 安全最佳实践
 
-### Data Access Control
+### 数据访问控制
 
-- **Never expose sensitive IDs** in tool parameters
-- **Use database constraints** for permission checks
-- **Validate all inputs** at service boundaries
-- **Log access attempts** for audit trails
+- **永远不要在工具参数中暴露敏感ID**
+- **使用数据库约束进行权限检查**
+- **在服务边界验证所有输入**
+- **记录访问尝试以供审计**
 
-### Error Handling
+### 错误处理
 
-- **Use standard HTTP status codes** via ResponseInterceptor
-- **Return user-friendly messages** in API responses
-- **Log detailed errors** server-side for debugging
-- **Never expose internal system details** in error messages
+- **通过 ResponseInterceptor 使用标准HTTP状态码**
+- **在API响应中返回用户友好的消息**
+- **服务端记录详细错误以供调试**
+- **永远不要在错误消息中暴露内部系统详细信息**
 
-### Testing Security
+### 测试安全性
 
-- **Test unauthorized access scenarios**
-- **Verify permission boundaries**
-- **Mock external services** to prevent data leakage
-- **Use type-safe test utilities**
+- **测试未授权访问场景**
+- **验证权限边界**
+- **Mock外部服务以防止数据泄露**
+- **使用类型安全的测试工具**
 
-## Troubleshooting Common Issues
+## 🔍 常见问题排查
 
-### Type Errors in Tests
+### 测试中的类型错误
 
-**Problem**: `Property 'data' does not exist on type 'ErrorResponse | DataResponse<T>'`
+**问题**: `Property 'data' does not exist on type 'ErrorResponse | DataResponse<T>'`
 
-**Solution**: Use type assertions in controller tests:
+**解决方案**: 在控制器测试中使用类型断言:
+
 ```typescript
 expect((result as DataResponse<any>).data).toEqual(expectedData);
 ```
 
-**Explanation**: Controller tests verify ResponseBuilder wrapping, while service tests check raw data.
+**说明**: 控制器测试验证 ResponseBuilder 包装，而服务测试检查原始数据。
 
-### Permission Denied Errors
+### 权限拒绝错误
 
-**Problem**: `智能体无权限访问该知识库`
+**问题**: `智能体无权限访问该知识库`
 
-**Solution**: 
-1. Verify `AgentKnowledgeBase` relationship exists in database
-2. Check `agentId` is correctly set in toolkit settings
-3. Ensure unique constraint `agentId_knowledgeBaseId` is properly configured
+**解决方案**:
 
-### Database Connection Issues
+1. 验证数据库中存在 `AgentKnowledgeBase` 关系
+2. 检查工具集设置中 `agentId` 正确设置
+3. 确保唯一约束 `agentId_knowledgeBaseId` 正确配置
 
-**Problem**: Prisma client errors during development
+### 数据库连接问题
 
-**Solution**:
+**问题**: 开发期间 Prisma 客户端错误
+
+**解决方案**:
+
 ```bash
 pnpm --filter agent-api db:generate
 pnpm --filter agent-api db:push
-# or for complete reset:
+# 或完全重置:
 pnpm --filter agent-api db:reset
 ```
 
-### LlamaIndex Configuration
+### LlamaIndex 配置
 
-**Problem**: `Cannot find Embedding, please set Settings.embedModel`
+**问题**: `Cannot find Embedding, please set Settings.embedModel`
 
-**Solution**: Ensure proper LlamaIndex configuration in test environment or add proper mocking.
+**解决方案**: 确保测试环境中有适当的 LlamaIndex 配置或添加适当的模拟。
 
-# Important Development Reminders
+## 📌 重要开发提醒
 
-## Code Standards
-- **Do what has been asked; nothing more, nothing less**
-- **NEVER create files unless absolutely necessary for achieving your goal**
-- **ALWAYS prefer editing an existing file to creating a new one**
-- **NEVER proactively create documentation files (*.md) or README files unless explicitly requested**
+### 代码标准
 
-## Testing Standards
-- **Service Layer**: Test raw data returns without ResponseBuilder wrapping
-- **Controller Layer**: Test ResponseBuilder wrapped responses with proper type assertions
-- **Always run typecheck and tests before committing changes**
-- **Mock external dependencies appropriately in tests**
+- **只做被要求的事情；不多不少**
+- **除非绝对必要，永远不要创建文件**
+- **总是优先编辑现有文件而不是创建新文件**
+- **除非明确要求，永远不要主动创建文档文件 (*.md) 或 README 文件**
 
-## Security Standards
-- **Never expose agentId or sensitive IDs in tool parameters**
-- **Use database unique constraints for efficient permission checks**
-- **Validate all permissions at service layer, not controller layer**
-- **Always throw appropriate exceptions for access violations**
+### 测试标准
 
-## Architecture Principles
-- **Maintain separation of concerns**: Service → Controller → Interceptor
-- **Follow established patterns**: ResponseBuilder for controllers, raw data for services
-- **Use TypeScript types correctly**: Prefer type safety over `any`
-- **Keep toolkit settings internal**: Never expose internal configuration to AI tools
+- **服务层**: 测试原始数据返回，不使用 ResponseBuilder 包装
+- **控制器层**: 使用适当的类型断言测试 ResponseBuilder 包装的响应
+- **提交更改前必须运行 typecheck 和测试**
+- **在测试中适当地模拟外部依赖**
+
+### 安全标准
+
+- **永远不要在工具参数中暴露 agentId 或敏感ID**
+- **使用数据库唯一约束进行高效权限检查**
+- **在服务层而不是控制器层验证所有权限**
+- **对访问违规总是抛出适当的异常**
+
+### 架构原则
+
+- **维护关注点分离**: 服务 → 控制器 → 拦截器
+- **遵循既定模式**: 控制器使用 ResponseBuilder，服务返回原始数据
+- **正确使用 TypeScript 类型**: 优先选择类型安全而不是 `any`
+- **保持工具集设置内部化**: 永远不要向AI工具暴露内部配置

@@ -1,273 +1,244 @@
-# Testing Guide
+# 测试规范与实践
 
-This document provides guidance on running and writing tests for the Agent API.
+## 测试分层策略
 
-## Test Structure
-
-The testing framework is built with Jest and follows these patterns:
-
-- **Unit Tests**: Test individual services and controllers in isolation
-- **Integration Tests**: Test module interactions with mocked dependencies  
-- **End-to-End Tests**: Test complete API workflows with real HTTP requests
-
-## Running Tests
-
-### Basic Commands
-
-```bash
-# Run all unit tests
-pnpm test
-
-# Run tests in watch mode
-pnpm test:watch
-
-# Run with coverage report
-pnpm test:cov
-
-# Run coverage in watch mode
-pnpm test:cov:watch
-
-# Run only unit tests (exclude e2e)
-pnpm test:unit
-
-# Run only e2e tests
-pnpm test:e2e
-
-# Run all tests (unit + e2e)
-pnpm test:all
-
-# Run tests for CI (no watch, with coverage)
-pnpm test:ci
-```
-
-### Debug Tests
-
-```bash
-# Debug tests with breakpoints
-pnpm test:debug
-
-# Debug specific test file
-pnpm test:debug -- agent.service.spec.ts
-```
-
-## Test Categories
-
-### 1. Service Tests (`*.service.spec.ts`)
-
-Test business logic and service methods:
-
-- **Agent Service**: CRUD operations, toolkit assignment, chat functionality
-- **Workflow Service**: DSL parsing, workflow execution, agent management
-- **Tools Service**: Tool discovery and toolkit management  
-- **Knowledge Base Service**: File operations, vector storage, agent linking
-
-### 2. Controller Tests (`*.controller.spec.ts`)
-
-Test HTTP endpoints and request/response handling:
-
-- **Agent Controller**: REST API endpoints for agent management
-- **Workflow Controller**: DSL generation, workflow execution APIs
-- **Toolkits Controller**: Toolkit listing and discovery
-
-### 3. End-to-End Tests (`*.e2e-spec.ts`)
-
-Test complete user workflows:
-
-- **Agent E2E**: Full agent lifecycle from creation to deletion
-- **Workflow E2E**: Complete workflow creation, execution, and management
-
-## Coverage Requirements
-
-The project maintains minimum coverage thresholds:
-
-- **Branches**: 70%
-- **Functions**: 70% 
-- **Lines**: 70%
-- **Statements**: 70%
-
-Coverage reports are generated in multiple formats:
-- Terminal output (text)
-- HTML report (`coverage/lcov-report/index.html`)
-- LCOV format for CI integration
-- JSON format for programmatic access
-
-## Writing Tests
-
-### Test Structure
-
-Each test file should follow this structure:
+### 服务层测试重点
 
 ```typescript
-describe('ServiceName', () => {
-  let service: ServiceName;
-  let dependency: jest.Mocked<DependencyService>;
+// 测试业务逻辑，返回原始数据 (agent.service.spec.ts)
+describe('AgentService', () => {
+  it('should create agent with auto toolkit assignment', async () => {
+    const mockAgent = createMockAgent();
+    mockPrisma.agent.create.mockResolvedValue(mockAgent);
 
-  beforeEach(async () => {
-    // Setup test module and dependencies
+    const result = await service.create(createAgentDto);
+
+    // 测试原始数据返回
+    expect(result).toEqual(mockAgent);
+    expect(mockToolsService.assignToolkitToAgent).toHaveBeenCalledWith(
+      mockAgent.id,
+      'common-toolkit-id',
+      {}
+    );
   });
+});
+```
 
-  afterEach(() => {
-    jest.restoreAllMocks();
+### 控制器层测试重点
+
+```typescript
+// 测试ResponseBuilder包装和HTTP层 (agent.controller.spec.ts)
+describe('AgentController', () => {
+  it('should return wrapped response', async () => {
+    const mockAgents = [createMockAgent()];
+    mockAgentService.findAll.mockResolvedValue(mockAgents);
+
+    const result = await controller.findAll();
+
+    // 测试ResponseBuilder包装
+    expect((result as DataResponse<Agent[]>).success).toBe(true);
+    expect((result as DataResponse<Agent[]>).data).toEqual(mockAgents);
   });
+});
+```
 
-  describe('methodName', () => {
-    it('should handle success case', () => {
-      // Test implementation
+## 权限测试模式
+
+### 知识库权限测试
+
+```typescript
+// 测试权限边界 (knowledge-base.service.spec.ts)
+describe('query with permissions', () => {
+  it('should allow access when agent has permission', async () => {
+    mockPrisma.agentKnowledgeBase.findUnique.mockResolvedValue({
+      agentId: 'agent-1',
+      knowledgeBaseId: 'kb-1'
     });
 
-    it('should handle error case', () => {
-      // Test error scenarios
+    await expect(
+      service.query('kb-1', 'test query', 'agent-1')
+    ).resolves.not.toThrow();
+  });
+
+  it('should deny access when agent lacks permission', async () => {
+    mockPrisma.agentKnowledgeBase.findUnique.mockResolvedValue(null);
+
+    await expect(
+      service.query('kb-1', 'test query', 'agent-1')
+    ).rejects.toThrow(ForbiddenException);
+  });
+});
+```
+
+### 工具集权限测试
+
+```typescript
+// 测试工具集权限传递
+describe('toolkit permissions', () => {
+  it('should pass agent context to tools', async () => {
+    const toolkit = new KnowledgeBaseToolkit();
+    toolkit.settings = { agentId: 'test-agent' };
+
+    const tools = await toolkit.getTools();
+
+    // 验证工具继承了智能体上下文
+    expect(tools[0].metadata.agentId).toBe('test-agent');
+  });
+});
+```
+
+## 异步处理测试
+
+### 文件处理异步测试
+
+```typescript
+// 测试异步文件处理 (knowledge-base.service.spec.ts)
+describe('file processing', () => {
+  it('should handle file upload asynchronously', async () => {
+    const mockFile = { originalname: 'test.txt' } as Express.Multer.File;
+
+    const result = await service.uploadFile('kb-1', mockFile);
+
+    // 立即返回文件记录
+    expect(result.status).toBe(FileStatus.PENDING);
+
+    // 异步处理不应阻塞响应
+    expect(mockPrisma.file.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        status: FileStatus.PENDING
+      })
     });
   });
 });
 ```
 
-### Test Utilities
-
-Global test utilities are available in all test files:
+### 工作流执行测试
 
 ```typescript
-// Create mock objects
-const mockAgent = createMockAgent({ name: 'Custom Name' });
-const mockWorkflow = createMockWorkflow({ description: 'Custom Desc' });
-const mockKB = createMockKnowledgeBase({ name: 'Custom KB' });
-const mockToolkit = createMockToolkit({ id: 'custom-id' });
+// 测试事件驱动工作流
+describe('workflow execution', () => {
+  it('should execute workflow steps in sequence', async () => {
+    const mockDSL = {
+      steps: [
+        { trigger: { type: 'workflow_start' }, action: { type: 'agent_call' } }
+      ]
+    };
 
-// Mock dates for consistent testing
-mockDate('2023-01-01T00:00:00Z');
-// ... test code ...
-restoreDate();
-```
+    const workflow = await service.fromDsl(mockDSL);
 
-### Mocking Guidelines
+    // 模拟事件发布
+    eventBus.publish('workflow_start', { input: 'test' });
 
-1. **Mock External Dependencies**: Always mock external services and APIs
-2. **Mock Database**: Use jest mocks for Prisma client methods
-3. **Mock Loggers**: Console methods are automatically mocked
-4. **Mock Dates**: Use `mockDate()` for time-dependent tests
-
-### Test Data
-
-Use the provided factory functions for consistent test data:
-
-```typescript
-// Good: Use factories
-const agent = createMockAgent({ name: 'Test Agent' });
-
-// Avoid: Manual object creation
-const agent = {
-  id: 'some-id',
-  name: 'Test Agent',
-  // ... many fields
-};
-```
-
-## Best Practices
-
-### 1. Test Isolation
-
-- Each test should be independent
-- Use `beforeEach/afterEach` for setup/cleanup
-- Don't rely on test execution order
-
-### 2. Descriptive Test Names
-
-```typescript
-// Good
-it('should create agent with automatic common toolkit assignment', () => {
-
-// Bad  
-it('should create agent', () => {
-```
-
-### 3. Test Both Success and Error Cases
-
-```typescript
-describe('createAgent', () => {
-  it('should create agent successfully', () => {
-    // Test success path
-  });
-
-  it('should throw NotFoundException when toolkit not found', () => {
-    // Test error path
+    // 验证步骤执行
+    await new Promise(resolve => setTimeout(resolve, 100));
+    expect(mockAgentService.chat).toHaveBeenCalled();
   });
 });
 ```
 
-### 4. Use Proper Assertions
+## Mock设计模式
+
+### 类型安全Mock
 
 ```typescript
-// Good: Specific assertions
-expect(result).toHaveProperty('id');
-expect(result.name).toBe('Expected Name');
-expect(mockService.method).toHaveBeenCalledWith(expectedArgs);
+// 全局Mock工厂 (test-setup.ts)
+export const createMockAgent = (overrides?: Partial<Agent>): Agent => ({
+  id: 'mock-agent-id',
+  name: 'Mock Agent',
+  description: 'Mock Description',
+  prompt: 'You are a helpful assistant',
+  options: {},
+  isWorkflowGenerated: false,
+  deleted: false,
+  createdAt: mockDate,
+  updatedAt: mockDate,
+  ...overrides,
+});
 
-// Bad: Generic assertions
-expect(result).toBeTruthy();
-expect(mockService.method).toHaveBeenCalled();
+// 在测试中使用
+const agent = createMockAgent({ name: 'Custom Agent' });
 ```
 
-### 5. Mock at the Right Level
+### 服务Mock模式
 
 ```typescript
-// Good: Mock the service method
-mockService.findAgent.mockResolvedValue(mockAgent);
+// 服务依赖Mock (agent.service.spec.ts)
+beforeEach(async () => {
+  const module: TestingModule = await Test.createTestingModule({
+    providers: [
+      AgentService,
+      {
+        provide: PrismaService,
+        useValue: mockPrisma,
+      },
+      {
+        provide: ToolsService,
+        useValue: mockToolsService,
+      },
+    ],
+  }).compile();
 
-// Bad: Mock implementation details
-jest.spyOn(prisma.agent, 'findUnique').mockResolvedValue(mockAgent);
+  service = module.get<AgentService>(AgentService);
+});
 ```
 
-## Debugging Tests
+## 测试数据管理
 
-### Common Issues
+### 测试隔离
 
-1. **Async/Await**: Ensure all async operations use `await`
-2. **Mock Cleanup**: Use `jest.restoreAllMocks()` in `afterEach`
-3. **Timeout Issues**: Extend timeout for LLM-dependent tests
-4. **Module Dependencies**: Check module imports and mocking
-
-### Debug Tools
-
-```bash
-# Run specific test file
-pnpm test agent.service.spec.ts
-
-# Run specific test case
-pnpm test -- --testNamePattern="should create agent"
-
-# Run with verbose output
-pnpm test -- --verbose
-
-# Run with coverage for specific file
-pnpm test:cov -- agent.service.spec.ts
+```typescript
+// 每个测试清理Mock状态
+afterEach(() => {
+  jest.restoreAllMocks();
+  jest.clearAllMocks();
+});
 ```
 
-## CI/CD Integration
+### 一致性测试数据
 
-The test suite is designed for CI/CD environments:
-
-- Uses `test:ci` command for automated environments
-- Generates coverage reports in multiple formats
-- Includes coverage thresholds to maintain quality
-- Supports parallel test execution
-
-## File Structure
-
-```
-apps/agent-api/
-├── src/
-│   ├── **/*.spec.ts          # Unit tests (co-located)
-│   └── test-setup.ts         # Global test configuration
-├── test/
-│   ├── *.e2e-spec.ts         # End-to-end tests
-│   └── jest-e2e.json         # E2E Jest configuration
-├── coverage/                 # Generated coverage reports
-└── TESTING.md               # This file
+```typescript
+// 使用工厂函数确保数据一致性
+const createTestWorkflow = () => ({
+  id: 'test-workflow',
+  name: 'Test Workflow',
+  DSL: {
+    agents: [{ name: 'test_agent', prompt: 'Test prompt' }],
+    steps: [{ trigger: { type: 'workflow_start' } }]
+  }
+});
 ```
 
-## Performance
+## 性能测试指标
 
-- Unit tests should run in under 10 seconds total
-- E2E tests may take 30-60 seconds due to LLM interactions
-- Use `--maxWorkers=50%` for optimal parallel execution
-- Consider using `--bail` to stop on first failure during development
+### 测试运行时间要求
+
+```typescript
+// 超时配置
+describe('expensive operations', () => {
+  it('should complete within time limit', async () => {
+    const start = Date.now();
+
+    await service.expensiveOperation();
+
+    const duration = Date.now() - start;
+    expect(duration).toBeLessThan(5000); // 5秒内完成
+  }, 10000); // 10秒超时
+});
+```
+
+### 内存泄漏检测
+
+```typescript
+// 检测事件监听器清理
+describe('event cleanup', () => {
+  it('should clean up event listeners', async () => {
+    const workflow = await service.fromDsl(mockDSL);
+
+    const initialListeners = eventBus.listenerCount('test_event');
+    workflow.destroy();
+    const finalListeners = eventBus.listenerCount('test_event');
+
+    expect(finalListeners).toBeLessThanOrEqual(initialListeners);
+  });
+});
+```
