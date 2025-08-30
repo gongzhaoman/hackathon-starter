@@ -83,7 +83,7 @@ export interface ChatWithAgentDto {
 }
 
 export interface GenerateDslDto {
-  userMessage: string;
+  description: string;
 }
 
 export interface CreateWorkflowDto {

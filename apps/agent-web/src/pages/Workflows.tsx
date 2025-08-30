@@ -40,7 +40,7 @@ export function Workflows() {
 
     try {
       const response = await generateDslMutation.mutateAsync({
-        userMessage: naturalLanguageInput
+        description: naturalLanguageInput
       })
 
       setGeneratedDsl(response.dsl.data)

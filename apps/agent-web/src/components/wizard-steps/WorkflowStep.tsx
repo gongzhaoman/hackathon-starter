@@ -41,7 +41,7 @@ function CreateWorkflowDialog({ open, onClose, onSuccess }: CreateWorkflowDialog
 
     try {
       const response = await generateDslMutation.mutateAsync({
-        userMessage: naturalInput
+        description: naturalInput
       })
       
       setGeneratedDsl(response.dsl.data)

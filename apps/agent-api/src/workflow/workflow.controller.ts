@@ -1,10 +1,10 @@
-import { 
-  Body, 
-  Controller, 
-  Post, 
-  Get, 
-  Param, 
-  Delete, 
+import {
+  Body,
+  Controller,
+  Post,
+  Get,
+  Param,
+  Delete,
   Put,
   Query,
   HttpStatus,
@@ -107,7 +107,7 @@ export class WorkflowController {
         skip,
         search: query.search
       });
-      
+
       return ResponseBuilder.paginated(
         result.data,
         { page, pageSize, total: result.total },
@@ -131,8 +131,8 @@ export class WorkflowController {
     @Body() executeDto: ExecuteWorkflowDto,
   ) {
     const result = await this.workflowService.executeWorkflow(
-      id, 
-      executeDto.input, 
+      id,
+      executeDto.input,
       executeDto.context
     );
     return ResponseBuilder.success(result, '工作流执行成功');
@@ -151,8 +151,8 @@ export class WorkflowController {
     @Body() updateDto: UpdateWorkflowAgentDto,
   ) {
     const result = await this.workflowService.updateWorkflowAgent(
-      workflowId, 
-      agentName, 
+      workflowId,
+      agentName,
       updateDto
     );
     return ResponseBuilder.updated(result, '工作流智能体更新成功');
